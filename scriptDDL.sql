@@ -16,7 +16,8 @@
 --  * id_detalle_* llevan DEFAULT 0: el trigger INSTEAD OF los reemplaza, pero así el INSERT puede omitirlos.
 -- ============================================================
 
--- 1. Cambiar el contexto a la base de datos master para no bloquearla tú mismo
+-- PARA ELIMINAR LA BASE DE DATOS
+-- 1. Cambiar el contexto a la base de datos master para no bloquearla 
 -- USE master;
 -- GO
 
