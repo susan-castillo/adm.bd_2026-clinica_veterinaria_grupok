@@ -36,10 +36,26 @@ GO
 USE db_veterinaria;
 GO
 
+-- 4. Creacion de esquemas para el gestionamiento de las tablas
+CREATE SCHEMA pacientes AUTHORIZATION dbo;
+GO
+
+CREATE SCHEMA personal AUTHORIZATION dbo;
+GO
+
+CREATE SCHEMA clinica AUTHORIZATION dbo;
+GO
+
+CREATE SCHEMA farmacia AUTHORIZATION dbo;
+GO
+
+CREATE SCHEMA facturacion AUTHORIZATION dbo;
+GO
+
 -- ============================================================
 -- 1. TABLA: especies
 -- ============================================================
-CREATE TABLE especies (
+CREATE TABLE pacientes.especies (
     id_especie        BIGINT         IDENTITY(1,1) NOT NULL,
     nombre_e          NVARCHAR(100)  NOT NULL,
     descripcion_e     NVARCHAR(MAX)  NOT NULL,
@@ -50,13 +66,13 @@ CREATE TABLE especies (
 -- ============================================================
 -- 2. TABLA: razas
 -- ============================================================
-CREATE TABLE razas (
+CREATE TABLE pacientes.razas (
     id_raza           BIGINT         IDENTITY(1,1) NOT NULL,
     id_especie        BIGINT         NOT NULL,
     nombre_r          NVARCHAR(100)  NOT NULL,
     CONSTRAINT pk_razas PRIMARY KEY (id_raza),
     CONSTRAINT fk_razas_especie
-        FOREIGN KEY (id_especie) REFERENCES especies (id_especie)
+        FOREIGN KEY (id_especie) REFERENCES pacientes.especies (id_especie)
         ON UPDATE NO ACTION ON DELETE NO ACTION,
     CONSTRAINT uq_raza_por_especie UNIQUE (id_especie, nombre_r)
 );
@@ -64,7 +80,7 @@ CREATE TABLE razas (
 -- ============================================================
 -- 3. TABLA: propietarios
 -- ============================================================
-CREATE TABLE propietarios (
+CREATE TABLE pacientes.propietarios (
     id_propietario          BIGINT         IDENTITY(1,1) NOT NULL,
     dui_p                   NVARCHAR(20)   NOT NULL,
     nombre_p                NVARCHAR(100)  NOT NULL,
@@ -83,12 +99,12 @@ CREATE TABLE propietarios (
     CONSTRAINT chk_telefonos_distintos CHECK (telefono_p <> telefono_secundario_p)
 );
 -- UNIQUE opcional: permite varios NULL, como en PostgreSQL
-CREATE UNIQUE INDEX uq_propietarios_correo ON propietarios (correo_p) WHERE correo_p IS NOT NULL;
+CREATE UNIQUE INDEX uq_propietarios_correo ON pacientes.propietarios (correo_p) WHERE correo_p IS NOT NULL;
 
 -- ============================================================
 -- 4. TABLA: mascotas
 -- ============================================================
-CREATE TABLE mascotas (
+CREATE TABLE pacientes.mascotas (
     id_mascota        BIGINT            IDENTITY(1,1) NOT NULL,
     id_propietario    BIGINT            NOT NULL,
     id_raza           BIGINT            NOT NULL,
@@ -99,10 +115,10 @@ CREATE TABLE mascotas (
     tamanio_m         NVARCHAR(50),
     CONSTRAINT pk_mascotas PRIMARY KEY (id_mascota),
     CONSTRAINT fk_mascotas_propietario
-        FOREIGN KEY (id_propietario) REFERENCES propietarios (id_propietario)
+        FOREIGN KEY (id_propietario) REFERENCES pacientes.propietarios (id_propietario)
         ON UPDATE NO ACTION ON DELETE NO ACTION,
     CONSTRAINT fk_mascotas_raza
-        FOREIGN KEY (id_raza) REFERENCES razas (id_raza)
+        FOREIGN KEY (id_raza) REFERENCES pacientes.razas (id_raza)
         ON UPDATE NO ACTION ON DELETE NO ACTION,
     CONSTRAINT chk_sexo_m CHECK (sexo_m IN ('Macho', 'Hembra')),
     CONSTRAINT chk_peso_m CHECK (peso_m IS NULL OR peso_m > 0),
@@ -113,7 +129,7 @@ CREATE TABLE mascotas (
 -- ============================================================
 -- 5. TABLA: especialidades
 -- ============================================================
-CREATE TABLE especialidades (
+CREATE TABLE personal.especialidades (
     id_especialidad   BIGINT         IDENTITY(1,1) NOT NULL,
     nombre_esp        NVARCHAR(150)  NOT NULL,
     descripcion_esp   NVARCHAR(MAX),
@@ -124,7 +140,7 @@ CREATE TABLE especialidades (
 -- ============================================================
 -- 6. TABLA: veterinario
 -- ============================================================
-CREATE TABLE veterinario (
+CREATE TABLE personal.veterinario (
     id_veterinario    BIGINT         IDENTITY(1,1) NOT NULL,
     id_especialidad   BIGINT         NOT NULL,
     nombre_v          NVARCHAR(100)  NOT NULL,
@@ -133,20 +149,20 @@ CREATE TABLE veterinario (
     correo_v          NVARCHAR(150),
     CONSTRAINT pk_veterinario PRIMARY KEY (id_veterinario),
     CONSTRAINT fk_veterinario_especialidad
-        FOREIGN KEY (id_especialidad) REFERENCES especialidades (id_especialidad)
+        FOREIGN KEY (id_especialidad) REFERENCES personal.especialidades (id_especialidad)
         ON UPDATE NO ACTION ON DELETE NO ACTION,
     CONSTRAINT chk_correo_v CHECK (correo_v IS NULL OR correo_v LIKE '%@%.%'),
     CONSTRAINT chk_nombre_v CHECK (LEN(TRIM(nombre_v)) > 0),
     CONSTRAINT chk_apellido_v CHECK (LEN(TRIM(apellido_v)) > 0)
 );
 -- UNIQUE opcionales: permiten varios NULL, como en PostgreSQL
-CREATE UNIQUE INDEX uq_veterinario_telefono ON veterinario (telefono_v) WHERE telefono_v IS NOT NULL;
-CREATE UNIQUE INDEX uq_veterinario_correo   ON veterinario (correo_v)   WHERE correo_v IS NOT NULL;
+CREATE UNIQUE INDEX uq_veterinario_telefono ON personal.veterinario (telefono_v) WHERE telefono_v IS NOT NULL;
+CREATE UNIQUE INDEX uq_veterinario_correo   ON personal.veterinario (correo_v)   WHERE correo_v IS NOT NULL;
 
 -- ============================================================
 -- 7. TABLA: citas
 -- ============================================================
-CREATE TABLE citas (
+CREATE TABLE clinica.citas (
     id_cita           BIGINT         IDENTITY(1,1) NOT NULL,
     id_mascota        BIGINT         NOT NULL,
     id_veterinario    BIGINT         NOT NULL,
@@ -156,10 +172,10 @@ CREATE TABLE citas (
     costo_c           DECIMAL(10,2),
     CONSTRAINT pk_citas PRIMARY KEY (id_cita),
     CONSTRAINT fk_citas_mascota
-        FOREIGN KEY (id_mascota) REFERENCES mascotas (id_mascota)
+        FOREIGN KEY (id_mascota) REFERENCES pacientes.mascotas (id_mascota)
         ON UPDATE NO ACTION ON DELETE NO ACTION,
     CONSTRAINT fk_citas_veterinario
-        FOREIGN KEY (id_veterinario) REFERENCES veterinario (id_veterinario)
+        FOREIGN KEY (id_veterinario) REFERENCES personal.veterinario (id_veterinario)
         ON UPDATE NO ACTION ON DELETE NO ACTION,
     CONSTRAINT chk_estado_c
         CHECK (estado_c IN ('Programada', 'En curso', 'Completada', 'Cancelada')),
@@ -171,7 +187,7 @@ CREATE TABLE citas (
 -- ============================================================
 -- 8. TABLA: diagnosticos
 -- ============================================================
-CREATE TABLE diagnosticos (
+CREATE TABLE clinica.diagnosticos (
     id_diagnostico    BIGINT            IDENTITY(1,1) NOT NULL,
     id_cita           BIGINT            NOT NULL,
     descripcion_d     NVARCHAR(MAX)     NOT NULL,
@@ -180,7 +196,7 @@ CREATE TABLE diagnosticos (
     CONSTRAINT pk_diagnosticos PRIMARY KEY (id_diagnostico),
     CONSTRAINT uq_diagnosticos_cita UNIQUE (id_cita),
     CONSTRAINT fk_diagnosticos_cita
-        FOREIGN KEY (id_cita) REFERENCES citas (id_cita)
+        FOREIGN KEY (id_cita) REFERENCES clinica.citas (id_cita)
         ON UPDATE NO ACTION ON DELETE NO ACTION,
     CONSTRAINT chk_fecha_diagnostico
         CHECK (fecha_d IS NULL OR fecha_d <= CAST(GETDATE() AS DATE)),
@@ -191,7 +207,7 @@ CREATE TABLE diagnosticos (
 -- ============================================================
 -- 9. TABLA: procedimientos
 -- ============================================================
-CREATE TABLE procedimientos (
+CREATE TABLE clinica.procedimientos (
     id_procedimiento   BIGINT           IDENTITY(1,1) NOT NULL,
     id_diagnostico    BIGINT           NOT NULL,
     nombre_p          NVARCHAR(100),
@@ -200,7 +216,7 @@ CREATE TABLE procedimientos (
     CONSTRAINT pk_procedimientos PRIMARY KEY (id_procedimiento),
     CONSTRAINT fk_procedimientos_diagnostico
         FOREIGN KEY (id_diagnostico)
-        REFERENCES diagnosticos (id_diagnostico)
+        REFERENCES clinica.diagnosticos (id_diagnostico)
         ON UPDATE NO ACTION ON DELETE NO ACTION,
     CONSTRAINT chk_costo_p CHECK (costo_p IS NULL OR costo_p >= 0),
     CONSTRAINT chk_nombre_procedimiento
@@ -210,7 +226,7 @@ CREATE TABLE procedimientos (
 -- ============================================================
 -- 10. TABLA: tratamiento
 -- ============================================================
-CREATE TABLE tratamiento (
+CREATE TABLE clinica.tratamiento (
     id_tratamiento      BIGINT           IDENTITY(1,1) NOT NULL,
     id_diagnostico      BIGINT           NOT NULL,
     fecha_inicio        DATE,
@@ -220,7 +236,7 @@ CREATE TABLE tratamiento (
     CONSTRAINT pk_tratamiento PRIMARY KEY (id_tratamiento),
     CONSTRAINT fk_tratamiento_diagnostico
         FOREIGN KEY (id_diagnostico)
-        REFERENCES diagnosticos (id_diagnostico)
+        REFERENCES clinica.diagnosticos (id_diagnostico)
         ON UPDATE NO ACTION ON DELETE NO ACTION,
     CONSTRAINT chk_fechas_tratamiento
         CHECK (fecha_inicio IS NULL OR fecha_fin IS NULL OR fecha_inicio <= fecha_fin),
@@ -233,7 +249,7 @@ CREATE TABLE tratamiento (
 -- ============================================================
 -- 11. TABLA: medicamentos
 -- ============================================================
-CREATE TABLE medicamentos (
+CREATE TABLE farmacia.medicamentos (
     id_medicamento    BIGINT            IDENTITY(1,1) NOT NULL,
     nombre_m          NVARCHAR(150)     NOT NULL,
     presentacion_m    NVARCHAR(100),
@@ -253,7 +269,7 @@ CREATE TABLE medicamentos (
 -- ============================================================
 -- 12. TABLA: detalles_tratamientos (ENTIDAD DÉBIL)
 -- ============================================================
-CREATE TABLE detalles_tratamientos (
+CREATE TABLE clinica.detalles_tratamientos (
     id_detalle_tratamiento  BIGINT       NOT NULL CONSTRAINT df_dt_id_detalle DEFAULT 0, -- Controlado por trigger (INSTEAD OF)
     id_tratamiento          BIGINT       NOT NULL,
     id_medicamento          BIGINT       NOT NULL,
@@ -263,11 +279,11 @@ CREATE TABLE detalles_tratamientos (
     CONSTRAINT pk_detalles_tratamientos PRIMARY KEY (id_tratamiento, id_detalle_tratamiento),
     CONSTRAINT fk_dt_tratamiento
         FOREIGN KEY (id_tratamiento)
-        REFERENCES tratamiento (id_tratamiento)
+        REFERENCES clinica.tratamiento (id_tratamiento)
         ON UPDATE NO ACTION ON DELETE CASCADE,
     CONSTRAINT fk_dt_medicamento
         FOREIGN KEY (id_medicamento)
-        REFERENCES medicamentos (id_medicamento)
+        REFERENCES farmacia.medicamentos (id_medicamento)
         ON UPDATE NO ACTION ON DELETE NO ACTION,
     CONSTRAINT chk_duracion
         CHECK (duracion_dias_dt IS NULL OR duracion_dias_dt > 0),
@@ -280,7 +296,7 @@ CREATE TABLE detalles_tratamientos (
 -- ============================================================
 -- 13. TABLA: facturas
 -- ============================================================
-CREATE TABLE facturas (
+CREATE TABLE facturacion.facturas (
     id_factura        BIGINT         IDENTITY(1,1) NOT NULL,
     id_cita           BIGINT,
     fecha_emision_f   DATE           NOT NULL,
@@ -289,7 +305,7 @@ CREATE TABLE facturas (
     CONSTRAINT pk_facturas PRIMARY KEY (id_factura),
     CONSTRAINT fk_facturas_cita
         FOREIGN KEY (id_cita)
-        REFERENCES citas (id_cita)
+        REFERENCES clinica.citas (id_cita)
         ON UPDATE NO ACTION ON DELETE NO ACTION,
     CONSTRAINT chk_estado_f
         CHECK (estado_f IN ('Pendiente', 'Pagada', 'Anulada', 'Cancelada')),
@@ -301,12 +317,12 @@ CREATE TABLE facturas (
         CHECK (estado_f <> 'Pagada' OR total_f > 0)
 );
 -- UNIQUE opcional: permite varios NULL, como en PostgreSQL
-CREATE UNIQUE INDEX uq_facturas_cita ON facturas (id_cita) WHERE id_cita IS NOT NULL;
+CREATE UNIQUE INDEX uq_facturas_cita ON facturacion.facturas (id_cita) WHERE id_cita IS NOT NULL;
 
 -- ============================================================
 -- 14. TABLA: detalles_facturas (ENTIDAD DÉBIL)
 -- ============================================================
-CREATE TABLE detalles_facturas (
+CREATE TABLE facturacion.detalles_facturas (
     id_detalle_factura  BIGINT           NOT NULL CONSTRAINT df_df_id_detalle DEFAULT 0, -- Controlado por trigger (INSTEAD OF)
     id_factura          BIGINT           NOT NULL,
     id_cita             BIGINT           NULL,
@@ -320,23 +336,23 @@ CREATE TABLE detalles_facturas (
     CONSTRAINT pk_detalles_facturas PRIMARY KEY (id_factura, id_detalle_factura),
     CONSTRAINT fk_df_factura
         FOREIGN KEY (id_factura)
-        REFERENCES facturas (id_factura)
+        REFERENCES facturacion.facturas (id_factura)
         ON UPDATE NO ACTION ON DELETE CASCADE,
     CONSTRAINT fk_df_cita
         FOREIGN KEY (id_cita)
-        REFERENCES citas (id_cita)
+        REFERENCES clinica.citas (id_cita)
         ON UPDATE NO ACTION ON DELETE SET NULL,
     CONSTRAINT fk_df_medicamento
         FOREIGN KEY (id_medicamento)
-        REFERENCES medicamentos (id_medicamento)
+        REFERENCES farmacia.medicamentos (id_medicamento)
         ON UPDATE NO ACTION ON DELETE SET NULL,
     CONSTRAINT fk_df_tratamiento
         FOREIGN KEY (id_tratamiento)
-        REFERENCES tratamiento (id_tratamiento)
+        REFERENCES clinica.tratamiento (id_tratamiento)
         ON UPDATE NO ACTION ON DELETE SET NULL,
     CONSTRAINT fk_df_procedimiento
         FOREIGN KEY (id_procedimiento)
-        REFERENCES procedimientos (id_procedimiento)
+        REFERENCES clinica.procedimientos (id_procedimiento)
         ON UPDATE NO ACTION ON DELETE SET NULL,
     CONSTRAINT chk_cantidad_df
         CHECK (cantidad_df > 0),
