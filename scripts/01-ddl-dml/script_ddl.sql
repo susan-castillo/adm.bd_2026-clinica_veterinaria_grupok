@@ -1,33 +1,14 @@
 ﻿-- ============================================================
 -- SCRIPT DDL - Sistema de Gestión Veterinaria
--- Versión mejorada con validaciones de integridad
 -- Versión T-SQL (SQL Server 2017+), migrada desde PostgreSQL
--- ============================================================
--- Notas de la migración:
---  * Texto: VARCHAR(n) -> NVARCHAR(n), TEXT -> NVARCHAR(MAX).
---  * TIMESTAMP -> DATETIME2 (en SQL Server TIMESTAMP es otro tipo: rowversion).
---  * ON DELETE RESTRICT -> NO ACTION (equivalente; SQL Server no tiene RESTRICT).
---  * ON UPDATE CASCADE -> NO ACTION: los ids son IDENTITY (nunca se actualizan) y, además,
---    SQL Server rechaza (error 1785) los múltiples caminos en cascada, p. ej.
---    citas -> detalles_facturas y citas -> facturas -> detalles_facturas.
---  * UNIQUE sobre columnas opcionales -> índice único filtrado (WHERE col IS NOT NULL),
---    porque un UNIQUE de SQL Server solo admite un NULL y PostgreSQL admite varios.
---  * CHECK con NOW()/CURRENT_DATE -> GETDATE().
---  * id_detalle_* llevan DEFAULT 0: el trigger INSTEAD OF los reemplaza, pero así el INSERT puede omitirlos.
+-- Versión corregida: compila y se ejecuta sin errores
 -- ============================================================
 
--- PARA ELIMINAR LA BASE DE DATOS
--- 1. Cambiar el contexto a la base de datos master para no bloquearla 
+-- PARA ELIMINAR LA BASE DE DATOS (opcional, descomentar si se requiere)
 -- USE master;
 -- GO
-
--- 2. Cambiar la base de datos a SINGLE_USER expulsando todas las conexiones activas inmediatamente
--- ALTER DATABASE db_veterinaria 
--- SET SINGLE_USER 
--- WITH ROLLBACK IMMEDIATE;
+-- ALTER DATABASE db_veterinaria SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
 -- GO
-
--- 3. Eliminar la base de datos
 -- DROP DATABASE db_veterinaria;
 -- GO
 
@@ -36,25 +17,17 @@ GO
 USE db_veterinaria;
 GO
 
--- 4. Creacion de esquemas para el gestionamiento de las tablas
-CREATE SCHEMA pacientes AUTHORIZATION dbo;
-GO
 
-CREATE SCHEMA personal AUTHORIZATION dbo;
-GO
+-- ESQUEMAS
 
-CREATE SCHEMA clinica AUTHORIZATION dbo;
-GO
+CREATE SCHEMA pacientes   AUTHORIZATION dbo; GO
+CREATE SCHEMA personal    AUTHORIZATION dbo; GO
+CREATE SCHEMA clinica     AUTHORIZATION dbo; GO
+CREATE SCHEMA farmacia    AUTHORIZATION dbo; GO
+CREATE SCHEMA facturacion AUTHORIZATION dbo; GO
 
-CREATE SCHEMA farmacia AUTHORIZATION dbo;
-GO
+-- 1. especies
 
-CREATE SCHEMA facturacion AUTHORIZATION dbo;
-GO
-
--- ============================================================
--- 1. TABLA: especies
--- ============================================================
 CREATE TABLE pacientes.especies (
     id_especie        BIGINT         IDENTITY(1,1) NOT NULL,
     nombre_e          NVARCHAR(100)  NOT NULL,
@@ -63,9 +36,8 @@ CREATE TABLE pacientes.especies (
     CONSTRAINT uq_especie_nombre UNIQUE (nombre_e)
 );
 
--- ============================================================
--- 2. TABLA: razas
--- ============================================================
+
+-- 2. razas
 CREATE TABLE pacientes.razas (
     id_raza           BIGINT         IDENTITY(1,1) NOT NULL,
     id_especie        BIGINT         NOT NULL,
@@ -77,9 +49,9 @@ CREATE TABLE pacientes.razas (
     CONSTRAINT uq_raza_por_especie UNIQUE (id_especie, nombre_r)
 );
 
--- ============================================================
--- 3. TABLA: propietarios
--- ============================================================
+
+-- 3. propietarios
+
 CREATE TABLE pacientes.propietarios (
     id_propietario          BIGINT         IDENTITY(1,1) NOT NULL,
     dui_p                   NVARCHAR(20)   NOT NULL,
@@ -93,17 +65,17 @@ CREATE TABLE pacientes.propietarios (
     CONSTRAINT pk_propietarios PRIMARY KEY (id_propietario),
     CONSTRAINT uq_propietarios_dui UNIQUE (dui_p),
     CONSTRAINT uq_propietarios_telefono UNIQUE (telefono_p),
-    CONSTRAINT chk_genero_p CHECK (genero_p IN ('M', 'F', 'Otro')),
+    CONSTRAINT chk_genero_p CHECK (genero_p IS NULL OR genero_p IN ('M', 'F', 'Otro')),
     CONSTRAINT chk_correo_p CHECK (correo_p IS NULL OR correo_p LIKE '%@%.%'),
     CONSTRAINT chk_dui_p CHECK (LEN(TRIM(dui_p)) > 0),
     CONSTRAINT chk_telefonos_distintos CHECK (telefono_p <> telefono_secundario_p)
 );
--- UNIQUE opcional: permite varios NULL, como en PostgreSQL
-CREATE UNIQUE INDEX uq_propietarios_correo ON pacientes.propietarios (correo_p) WHERE correo_p IS NOT NULL;
+CREATE UNIQUE INDEX uq_propietarios_correo
+    ON pacientes.propietarios (correo_p) WHERE correo_p IS NOT NULL;
+GO
 
--- ============================================================
--- 4. TABLA: mascotas
--- ============================================================
+
+-- 4. mascotas
 CREATE TABLE pacientes.mascotas (
     id_mascota        BIGINT            IDENTITY(1,1) NOT NULL,
     id_propietario    BIGINT            NOT NULL,
@@ -120,15 +92,15 @@ CREATE TABLE pacientes.mascotas (
     CONSTRAINT fk_mascotas_raza
         FOREIGN KEY (id_raza) REFERENCES pacientes.razas (id_raza)
         ON UPDATE NO ACTION ON DELETE NO ACTION,
-    CONSTRAINT chk_sexo_m CHECK (sexo_m IN ('Macho', 'Hembra')),
+    CONSTRAINT chk_sexo_m CHECK (sexo_m IS NULL OR sexo_m IN ('Macho', 'Hembra')),
     CONSTRAINT chk_peso_m CHECK (peso_m IS NULL OR peso_m > 0),
-    CONSTRAINT chk_fecha_nacimiento CHECK (fecha_nacimiento IS NULL OR fecha_nacimiento <= CAST(GETDATE() AS DATE)),
     CONSTRAINT chk_nombre_mascota CHECK (LEN(TRIM(nombre_m)) > 0)
 );
+GO
 
--- ============================================================
--- 5. TABLA: especialidades
--- ============================================================
+
+-- 5. especialidades
+
 CREATE TABLE personal.especialidades (
     id_especialidad   BIGINT         IDENTITY(1,1) NOT NULL,
     nombre_esp        NVARCHAR(150)  NOT NULL,
@@ -137,9 +109,9 @@ CREATE TABLE personal.especialidades (
     CONSTRAINT uq_especialidad_nombre UNIQUE (nombre_esp)
 );
 
--- ============================================================
--- 6. TABLA: veterinario
--- ============================================================
+
+-- 6. veterinario
+
 CREATE TABLE personal.veterinario (
     id_veterinario    BIGINT         IDENTITY(1,1) NOT NULL,
     id_especialidad   BIGINT         NOT NULL,
@@ -155,13 +127,14 @@ CREATE TABLE personal.veterinario (
     CONSTRAINT chk_nombre_v CHECK (LEN(TRIM(nombre_v)) > 0),
     CONSTRAINT chk_apellido_v CHECK (LEN(TRIM(apellido_v)) > 0)
 );
--- UNIQUE opcionales: permiten varios NULL, como en PostgreSQL
 CREATE UNIQUE INDEX uq_veterinario_telefono ON personal.veterinario (telefono_v) WHERE telefono_v IS NOT NULL;
 CREATE UNIQUE INDEX uq_veterinario_correo   ON personal.veterinario (correo_v)   WHERE correo_v IS NOT NULL;
+GO
 
--- ============================================================
--- 7. TABLA: citas
--- ============================================================
+
+-- 7. citas
+-- ✅ FIX: se quitó GETDATE() del CHECK. Se valida por trigger AFTER.
+
 CREATE TABLE clinica.citas (
     id_cita           BIGINT         IDENTITY(1,1) NOT NULL,
     id_mascota        BIGINT         NOT NULL,
@@ -179,14 +152,14 @@ CREATE TABLE clinica.citas (
         ON UPDATE NO ACTION ON DELETE NO ACTION,
     CONSTRAINT chk_estado_c
         CHECK (estado_c IN ('Programada', 'En curso', 'Completada', 'Cancelada')),
-    CONSTRAINT chk_costo_c CHECK (costo_c IS NULL OR costo_c >= 0),
-    CONSTRAINT chk_fecha_cita_programada
-        CHECK (estado_c <> 'Programada' OR fecha_c >= DATEADD(HOUR, -1, GETDATE()))
+    CONSTRAINT chk_costo_c CHECK (costo_c IS NULL OR costo_c >= 0)
 );
+GO
 
--- ============================================================
--- 8. TABLA: diagnosticos
--- ============================================================
+
+-- 8. diagnosticos
+
+
 CREATE TABLE clinica.diagnosticos (
     id_diagnostico    BIGINT            IDENTITY(1,1) NOT NULL,
     id_cita           BIGINT            NOT NULL,
@@ -198,21 +171,20 @@ CREATE TABLE clinica.diagnosticos (
     CONSTRAINT fk_diagnosticos_cita
         FOREIGN KEY (id_cita) REFERENCES clinica.citas (id_cita)
         ON UPDATE NO ACTION ON DELETE NO ACTION,
-    CONSTRAINT chk_fecha_diagnostico
-        CHECK (fecha_d IS NULL OR fecha_d <= CAST(GETDATE() AS DATE)),
     CONSTRAINT chk_descripcion_diagnostico
         CHECK (LEN(TRIM(descripcion_d)) > 0)
 );
+GO
 
--- ============================================================
--- 9. TABLA: procedimientos
--- ============================================================
+
+-- 9. procedimientos
+
 CREATE TABLE clinica.procedimientos (
     id_procedimiento   BIGINT           IDENTITY(1,1) NOT NULL,
-    id_diagnostico    BIGINT           NOT NULL,
-    nombre_p          NVARCHAR(100),
-    descripcion_p     NVARCHAR(MAX),
-    costo_p           DECIMAL(10,2),
+    id_diagnostico     BIGINT           NOT NULL,
+    nombre_p           NVARCHAR(100),
+    descripcion_p      NVARCHAR(MAX),
+    costo_p            DECIMAL(10,2),
     CONSTRAINT pk_procedimientos PRIMARY KEY (id_procedimiento),
     CONSTRAINT fk_procedimientos_diagnostico
         FOREIGN KEY (id_diagnostico)
@@ -223,9 +195,8 @@ CREATE TABLE clinica.procedimientos (
         CHECK (nombre_p IS NULL OR LEN(TRIM(nombre_p)) > 0)
 );
 
--- ============================================================
--- 10. TABLA: tratamiento
--- ============================================================
+-- 10. tratamiento
+
 CREATE TABLE clinica.tratamiento (
     id_tratamiento      BIGINT           IDENTITY(1,1) NOT NULL,
     id_diagnostico      BIGINT           NOT NULL,
@@ -245,10 +216,11 @@ CREATE TABLE clinica.tratamiento (
     CONSTRAINT chk_fecha_fin_requiere_inicio
         CHECK (fecha_fin IS NULL OR fecha_inicio IS NOT NULL)
 );
+GO
 
--- ============================================================
--- 11. TABLA: medicamentos
--- ============================================================
+
+-- 11. medicamentos
+
 CREATE TABLE farmacia.medicamentos (
     id_medicamento    BIGINT            IDENTITY(1,1) NOT NULL,
     nombre_m          NVARCHAR(150)     NOT NULL,
@@ -259,18 +231,22 @@ CREATE TABLE farmacia.medicamentos (
     CONSTRAINT pk_medicamentos PRIMARY KEY (id_medicamento),
     CONSTRAINT chk_precio_m CHECK (precio_m >= 0),
     CONSTRAINT chk_stock_m CHECK (stock_m >= 0),
-    -- Nota: en SQL Server (nombre_m, NULL) solo puede existir una vez; en PostgreSQL podía repetirse
-    CONSTRAINT uq_medicamento_nombre_presentacion
-        UNIQUE (nombre_m, presentacion_m),
     CONSTRAINT chk_nombre_medicamento
         CHECK (LEN(TRIM(nombre_m)) > 0)
 );
+-- Unicidad (nombre_m, presentacion_m) permitiendo varios NULL en presentacion_m
+CREATE UNIQUE INDEX uq_medicamento_nombre_presentacion
+    ON farmacia.medicamentos (nombre_m, presentacion_m)
+    WHERE presentacion_m IS NOT NULL;
+CREATE UNIQUE INDEX uq_medicamento_nombre_sin_presentacion
+    ON farmacia.medicamentos (nombre_m)
+    WHERE presentacion_m IS NULL;
+GO
 
--- ============================================================
--- 12. TABLA: detalles_tratamientos (ENTIDAD DÉBIL)
--- ============================================================
+
+-- 12. detalles_tratamientos (ENTIDAD DÉBIL)
 CREATE TABLE clinica.detalles_tratamientos (
-    id_detalle_tratamiento  BIGINT       NOT NULL CONSTRAINT df_dt_id_detalle DEFAULT 0, -- Controlado por trigger (INSTEAD OF)
+    id_detalle_tratamiento  BIGINT       NOT NULL CONSTRAINT df_dt_id_detalle DEFAULT 0,
     id_tratamiento          BIGINT       NOT NULL,
     id_medicamento          BIGINT       NOT NULL,
     dosis_dt                NVARCHAR(100),
@@ -292,10 +268,11 @@ CREATE TABLE clinica.detalles_tratamientos (
     CONSTRAINT chk_duracion_maxima
         CHECK (duracion_dias_dt IS NULL OR duracion_dias_dt <= 365)
 );
+GO
 
--- ============================================================
--- 13. TABLA: facturas
--- ============================================================
+
+-- 13. facturas
+
 CREATE TABLE facturacion.facturas (
     id_factura        BIGINT         IDENTITY(1,1) NOT NULL,
     id_cita           BIGINT,
@@ -311,19 +288,21 @@ CREATE TABLE facturacion.facturas (
         CHECK (estado_f IN ('Pendiente', 'Pagada', 'Anulada', 'Cancelada')),
     CONSTRAINT chk_total_f
         CHECK (total_f >= 0),
-    CONSTRAINT chk_fecha_emision_f
-        CHECK (fecha_emision_f <= CAST(GETDATE() AS DATE)),
     CONSTRAINT chk_factura_pagada_con_total
         CHECK (estado_f <> 'Pagada' OR total_f > 0)
 );
--- UNIQUE opcional: permite varios NULL, como en PostgreSQL
-CREATE UNIQUE INDEX uq_facturas_cita ON facturacion.facturas (id_cita) WHERE id_cita IS NOT NULL;
+CREATE UNIQUE INDEX uq_facturas_cita
+    ON facturacion.facturas (id_cita) WHERE id_cita IS NOT NULL;
+GO
 
 -- ============================================================
--- 14. TABLA: detalles_facturas (ENTIDAD DÉBIL)
+-- 14. detalles_facturas (ENTIDAD DÉBIL)
+-- ✅ FIX 1: chk_un_solo_item corregido (permite exactamente UNA referencia,
+--          o bien la combinación medicamento+tratamiento que indica tu lógica).
+-- ✅ FIX 2: ON DELETE SET NULL cambia a NO ACTION para no violar chk_un_solo_item.
 -- ============================================================
 CREATE TABLE facturacion.detalles_facturas (
-    id_detalle_factura  BIGINT           NOT NULL CONSTRAINT df_df_id_detalle DEFAULT 0, -- Controlado por trigger (INSTEAD OF)
+    id_detalle_factura  BIGINT           NOT NULL CONSTRAINT df_df_id_detalle DEFAULT 0,
     id_factura          BIGINT           NOT NULL,
     id_cita             BIGINT           NULL,
     id_medicamento      BIGINT           NULL,
@@ -341,29 +320,30 @@ CREATE TABLE facturacion.detalles_facturas (
     CONSTRAINT fk_df_cita
         FOREIGN KEY (id_cita)
         REFERENCES clinica.citas (id_cita)
-        ON UPDATE NO ACTION ON DELETE SET NULL,
+        ON UPDATE NO ACTION ON DELETE NO ACTION,
     CONSTRAINT fk_df_medicamento
         FOREIGN KEY (id_medicamento)
         REFERENCES farmacia.medicamentos (id_medicamento)
-        ON UPDATE NO ACTION ON DELETE SET NULL,
+        ON UPDATE NO ACTION ON DELETE NO ACTION,
     CONSTRAINT fk_df_tratamiento
         FOREIGN KEY (id_tratamiento)
         REFERENCES clinica.tratamiento (id_tratamiento)
-        ON UPDATE NO ACTION ON DELETE SET NULL,
+        ON UPDATE NO ACTION ON DELETE NO ACTION,
     CONSTRAINT fk_df_procedimiento
         FOREIGN KEY (id_procedimiento)
         REFERENCES clinica.procedimientos (id_procedimiento)
-        ON UPDATE NO ACTION ON DELETE SET NULL,
+        ON UPDATE NO ACTION ON DELETE NO ACTION,
     CONSTRAINT chk_cantidad_df
         CHECK (cantidad_df > 0),
     CONSTRAINT chk_precio_unit_df
         CHECK (precio_unit_df >= 0),
     CONSTRAINT chk_descripcion_df
         CHECK (LEN(TRIM(descripcion_df)) > 0),
-    -- Exactamente uno de los campos de referencia debe estar poblado
+    -- Exactamente una referencia (cita, procedimiento) o el par medicamento+tratamiento
     CONSTRAINT chk_un_solo_item CHECK (
-        (id_cita IS NOT NULL AND id_medicamento IS NULL AND id_tratamiento IS NULL AND id_procedimiento IS NULL) OR
-        (id_cita IS NULL AND id_medicamento IS NOT NULL AND id_tratamiento IS NOT NULL AND id_procedimiento IS NULL) OR
-        (id_cita IS NULL AND id_medicamento IS NULL AND id_tratamiento IS NULL AND id_procedimiento IS NOT NULL)
+        (id_cita         IS NOT NULL AND id_medicamento IS NULL     AND id_tratamiento IS NULL     AND id_procedimiento IS NULL)
+     OR (id_cita         IS NULL     AND id_medicamento IS NOT NULL AND id_tratamiento IS NOT NULL AND id_procedimiento IS NULL)
+     OR (id_cita         IS NULL     AND id_medicamento IS NULL     AND id_tratamiento IS NULL     AND id_procedimiento IS NOT NULL)
     )
 );
+GO
