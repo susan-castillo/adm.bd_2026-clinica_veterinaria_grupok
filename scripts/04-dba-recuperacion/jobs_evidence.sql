@@ -8,11 +8,7 @@ EXEC msdb.dbo.sp_start_job @job_name = N'FastPaws - Backup FULL semanal';
 WAITFOR DELAY '00:00:20';     -- aumentar si la base crece
 EXEC msdb.dbo.sp_start_job @job_name = N'FastPaws - Backup DIFERENCIAL diario';
 WAITFOR DELAY '00:00:20';
-EXEC msdb.dbo.sp_start_job @job_name = N'FastPaws - Backup LOG 15 min';
-WAITFOR DELAY '00:00:20';
-GO
-
--- 2. CAPTURA 1: resultado de cada job (step_id = 0) -> debe decir 'Exitoso'
+  
 SELECT j.name AS job,
        msdb.dbo.agent_datetime(h.run_date, h.run_time) AS inicio,
        STUFF(STUFF(RIGHT('000000' + CAST(h.run_duration AS VARCHAR(6)), 6), 3, 0, ':'), 6, 0, ':') AS duracion,
@@ -25,7 +21,7 @@ WHERE j.name LIKE N'FastPaws%' AND h.step_id = 0
 ORDER BY h.instance_id DESC;
 GO
 
--- 3. CAPTURA 2: detalle por paso (backup + verificación) de cada ejecución
+
 SELECT j.name AS job, h.step_id, h.step_name,
        msdb.dbo.agent_datetime(h.run_date, h.run_time) AS inicio,
        CASE h.run_status WHEN 0 THEN 'Fallido' WHEN 1 THEN 'Exitoso' ELSE 'Otro' END AS estado,

@@ -1,10 +1,16 @@
---SCRIPT DML MAESTRO - Sistema de Gestión Veterinaria
+-- ============================================================
+-- SCRIPT DML MAESTRO Y BLINDADO - Sistema de Gestión Veterinaria
+-- Base de datos: db_veterinaria
+-- ============================================================
 
 USE db_veterinaria;
 GO
 
-
--- 0. LIMPIEZA TOTAL Y REINICIO DE CONTADORES (En orden inverso a dependencias)
+-- ============================================================
+-- 0. DESACTIVAR RESTRICCIONES Y LIMPIAR DATOS
+-- ============================================================
+EXEC sp_MSforeachtable 'ALTER TABLE ? NOCHECK CONSTRAINT ALL';
+GO
 
 DELETE FROM facturacion.detalles_facturas;
 DELETE FROM facturacion.facturas;
@@ -128,9 +134,16 @@ VALUES
 GO
 
 -- ============================================================
--- 3° INSERT: propietarios (20)
+-- 3° INSERT: propietarios (20) - Con captura de IDs para escalabilidad
 -- ============================================================
+IF OBJECT_ID('tempdb..#TempPropietarios') IS NOT NULL DROP TABLE #TempPropietarios;
+CREATE TABLE #TempPropietarios (
+    RowID INT IDENTITY(1,1),
+    id_propietario INT
+);
+
 INSERT INTO pacientes.propietarios (dui_p, nombre_p, apellido_p, genero_p, telefono_p, telefono_secundario_p, correo_p, direccion_p)
+OUTPUT INSERTED.id_propietario INTO #TempPropietarios(id_propietario)
 VALUES ('01234567-8', 'Adriana', N'Mejía', 'F', '7123-4567', '2234-5678', 'adriana.mejia@gmail.com', N'Colonia Escalón, San Salvador'),
        ('02345678-9', 'Susan', 'Castillo', 'F', '7234-5678', '2345-6789', 'susan.castillo@gmail.com', N'Reparto Los Héroes, San Salvador'),
        ('03456789-0', 'Francisco', N'NoSé', 'M', '7345-6789', '2456-7890', 'francisco.nose@gmail.com', 'Colonia San Benito, San Salvador'),
@@ -151,84 +164,118 @@ VALUES ('01234567-8', 'Adriana', N'Mejía', 'F', '7123-4567', '2234-5678', 'adri
        ('18901234-5', 'Gabriela', 'Rivas', 'F', '7290-1234', '2101-2345', 'gabriela.rivas@gmail.com', N'Reparto Cucumacayán, San Salvador'),
        ('19012345-6', 'Alejandro', 'Molina', 'M', '7391-2345', '2212-3456', 'alejandro.molina@hotmail.com', N'Colonia Médica, San Salvador'),
        ('10123456-7', 'Daniela', 'Ortiz', 'F', '7492-3456', '2323-4567', 'daniela.ortiz@gmail.com', N'Colonia Escalón, San Salvador');
+
+IF OBJECT_ID('tempdb..#TempRazas') IS NOT NULL DROP TABLE #TempRazas;
+CREATE TABLE #TempRazas (nombre_r VARCHAR(100), id_raza INT);
+INSERT INTO #TempRazas (nombre_r, id_raza)
+SELECT nombre_r, id_raza FROM pacientes.razas;
 GO
 
 -- ============================================================
--- 4° INSERT: mascotas (71)
+-- 4° INSERT: mascotas (71) - Escalable con asignación modular rotativa
 -- ============================================================
-INSERT INTO pacientes.mascotas (id_propietario, id_raza, nombre_m, fecha_nacimiento, sexo_m, peso_m, tamanio_m)
+IF OBJECT_ID('tempdb..#MascotasNuevas') IS NOT NULL DROP TABLE #MascotasNuevas;
+CREATE TABLE #MascotasNuevas (
+    Secuencia INT IDENTITY(1,1),
+    nombre_r VARCHAR(100),
+    nombre_m VARCHAR(50),
+    fecha_nacimiento DATE,
+    sexo_m VARCHAR(10),
+    peso_m DECIMAL(5,2),
+    tamanio_m VARCHAR(20)
+);
+
+INSERT INTO #MascotasNuevas (nombre_r, nombre_m, fecha_nacimiento, sexo_m, peso_m, tamanio_m)
 VALUES
-(1, 1, 'Max', '2021-03-15', 'Macho', 30.5, 'Grande'),
-(2, 1, 'Luna', '2020-07-22', 'Hembra', 28.0, 'Grande'),
-(3, 2, 'Rex', '2019-11-10', 'Macho', 35.0, 'Grande'),
-(4, 2, 'Nala', '2022-01-05', 'Hembra', 29.5, 'Grande'),
-(5, 3, 'Tiny', '2023-05-18', 'Macho', 2.1, N'Pequeño'),
-(6, 3, 'Bella', '2022-09-30', 'Hembra', 1.8, N'Pequeño'),
-(7, 4, 'Buddy', '2021-06-12', 'Macho', 32.0, 'Grande'),
-(8, 4, 'Daisy', '2020-12-01', 'Hembra', 27.5, 'Grande'),
-(9, 5, 'Gordo', '2022-04-20', 'Macho', 12.0, 'Mediano'),
-(10, 5, 'Coco', '2023-02-14', 'Hembra', 10.5, 'Mediano'),
-(11, 6, 'Milo', '2021-08-03', 'Macho', 4.5, 'Mediano'),
-(12, 6, 'Nube', '2022-11-25', 'Hembra', 3.8, 'Mediano'),
-(13, 7, 'Pelusa', '2020-03-17', 'Hembra', 4.2, 'Mediano'),
-(14, 7, 'Simon', '2019-07-09', 'Macho', 5.0, 'Mediano'),
-(15, 8, 'Tigre', '2022-06-01', 'Macho', 5.5, 'Mediano'),
-(16, 8, 'Mia', '2023-01-19', 'Hembra', 4.0, 'Mediano'),
-(17, 9, 'Gigante', '2020-09-14', 'Macho', 8.5, 'Grande'),
-(18, 9, 'Reina', '2021-12-30', 'Hembra', 6.5, 'Grande'),
-(19, 10, 'Blanca', '2022-03-08', 'Hembra', 3.5, 'Mediano'),
-(20, 10, 'Fluffy', '2021-10-22', 'Macho', 4.0, 'Mediano'),
-(1, 11, 'Paco', '2018-05-11', 'Macho', 0.40, N'Pequeño'),
-(2, 11, 'Verde', '2019-08-23', 'Hembra', 0.30, N'Pequeño'),
-(3, 12, 'Sol', '2022-02-14', 'Macho', 0.02, N'Pequeño'),
-(4, 12, 'Pio', '2023-04-01', 'Hembra', 0.02, N'Pequeño'),
-(5, 13, 'Nieve', '2020-11-05', 'Hembra', 0.35, N'Pequeño'),
-(6, 13, 'Rocky', '2019-03-28', 'Macho', 0.40, N'Pequeño'),
-(7, 14, 'Azul', '2023-06-10', 'Macho', 0.03, N'Pequeño'),
-(8, 14, 'Verdecito', '2022-08-15', 'Hembra', 0.03, N'Pequeño'),
-(9, 15, 'Amor', '2022-01-30', 'Hembra', 0.05, N'Pequeño'),
-(10, 15, 'Pico', '2021-07-17', 'Macho', 0.05, N'Pequeño'),
-(11, 16, 'Bolita', '2023-03-12', 'Macho', 0.15, N'Pequeño'),
-(12, 16, 'Canela', '2022-10-05', 'Hembra', 0.13, N'Pequeño'),
-(13, 17, 'Manchas', '2021-05-20', 'Macho', 1.10, N'Pequeño'),
-(14, 17, 'Trebol', '2022-07-14', 'Hembra', 0.90, N'Pequeño'),
-(15, 18, 'Gris', '2020-04-08', 'Macho', 0.60, N'Pequeño'),
-(16, 18, 'Suave', '2021-09-19', 'Hembra', 0.50, N'Pequeño'),
-(17, 19, 'Raton', '2023-01-25', 'Macho', 0.35, N'Pequeño'),
-(18, 19, 'Noche', '2022-06-30', 'Hembra', 0.28, N'Pequeño'),
-(19, 20, 'Salto', '2023-05-03', 'Macho', 0.08, N'Pequeño'),
-(20, 20, 'Arena', '2022-11-11', 'Hembra', 0.07, N'Pequeño'),
-(1, 21, 'Dutch', '2021-02-18', 'Macho', 2.0, N'Pequeño'),
-(2, 21, 'Mochi', '2022-04-27', 'Hembra', 1.8, N'Pequeño'),
-(3, 22, 'Algodon', '2020-08-09', 'Macho', 3.5, 'Mediano'),
-(4, 22, 'Lana', '2021-11-14', 'Hembra', 3.2, 'Mediano'),
-(5, 23, 'Terciopelo', '2022-07-21', 'Macho', 4.0, 'Mediano'),
-(6, 23, 'Suavecito', '2023-03-05', 'Hembra', 3.5, 'Mediano'),
-(7, 24, 'Melena', '2022-09-16', 'Macho', 1.8, N'Pequeño'),
-(8, 24, 'Leon', '2021-04-02', 'Hembra', 1.6, N'Pequeño'),
-(9, 25, 'Orejon', '2023-02-28', 'Macho', 2.2, N'Pequeño'),
-(10, 25, 'Floppy', '2022-06-13', 'Hembra', 2.0, N'Pequeño'),
-(11, 26, 'Spike', '2021-01-15', 'Macho', 0.45, 'Mediano'),
-(12, 27, 'Spot', '2022-03-22', 'Hembra', 0.07, N'Pequeño'),
-(13, 28, 'Verde', '2020-06-30', 'Macho', 3.50, 'Grande'),
-(14, 29, 'Escarlata', '2023-01-10', 'Macho', 0.01, N'Pequeño'),
-(15, 30, 'Naranja', '2022-05-18', 'Hembra', 0.05, N'Pequeño'),
-(16, 31, 'Colores', '2023-04-05', 'Macho', 0.01, N'Pequeño'),
-(17, 32, 'Bandido', '2021-09-07', 'Macho', 1.2, N'Pequeño'),
-(18, 33, 'Pelin', '2022-12-19', 'Hembra', 0.9, N'Pequeño'),
-(19, 34, 'Blanco', '2023-02-01', 'Macho', 1.0, N'Pequeño'),
-(20, 35, 'Axo', '2022-08-14', 'Macho', 0.3, N'Pequeño'),
-(1, 36, 'Croac', '2021-11-28', 'Hembra', 0.08, N'Pequeño'),
-(2, 37, 'Tigresa', '2020-07-03', 'Hembra', 0.12, N'Pequeño'),
-(3, 38, 'Trueno', '2018-03-25', 'Macho', 450, 'Grande'),
-(4, 39, 'Pony', '2019-10-11', 'Hembra', 180, 'Mediano'),
-(5, 40, 'Burrito', '2017-06-16', 'Macho', 200, 'Mediano'),
-(6, 41, 'Chanchito', '2021-04-14', 'Macho', 45, 'Mediano'),
-(7, 42, 'Rosado', '2020-01-22', 'Hembra', 120, 'Grande'),
-(8, 43, 'Oink', '2019-08-30', 'Macho', 150, 'Grande'),
-(9, 44, 'Lana', '2020-11-17', 'Hembra', 55, 'Mediano'),
-(10, 45, 'Negrita', '2021-03-04', 'Hembra', 70, 'Mediano'),
-(11, 46, 'Borrego', '2022-07-09', 'Macho', 65, 'Mediano');
+('Labrador Retriever', 'Max', '2021-03-15', 'Macho', 30.5, 'Grande'),
+('Labrador Retriever', 'Luna', '2020-07-22', 'Hembra', 28.0, 'Grande'),
+(N'Pastor Alemán', 'Rex', '2019-11-10', 'Macho', 35.0, 'Grande'),
+(N'Pastor Alemán', 'Nala', '2022-01-05', 'Hembra', 29.5, 'Grande'),
+('Chihuahua', 'Tiny', '2023-05-18', 'Macho', 2.1, N'Pequeño'),
+('Chihuahua', 'Bella', '2022-09-30', 'Hembra', 1.8, N'Pequeño'),
+('Golden Retriever', 'Buddy', '2021-06-12', 'Macho', 32.0, 'Grande'),
+('Golden Retriever', 'Daisy', '2020-12-01', 'Hembra', 27.5, 'Grande'),
+(N'Bulldog Francés', 'Gordo', '2022-04-20', 'Macho', 12.0, 'Mediano'),
+(N'Bulldog Francés', 'Coco', '2023-02-14', 'Hembra', 10.5, 'Mediano'),
+(N'Siamés', 'Milo', '2021-08-03', 'Macho', 4.5, 'Mediano'),
+(N'Siamés', 'Nube', '2022-11-25', 'Hembra', 3.8, 'Mediano'),
+('Persa', 'Pelusa', '2020-03-17', 'Hembra', 4.2, 'Mediano'),
+('Persa', 'Simon', '2019-07-09', 'Macho', 5.0, 'Mediano'),
+(N'Bengalí', 'Tigre', '2022-06-01', 'Macho', 5.5, 'Mediano'),
+(N'Bengalí', 'Mia', '2023-01-19', 'Hembra', 4.0, 'Mediano'),
+('Maine Coon', 'Gigante', '2020-09-14', 'Macho', 8.5, 'Grande'),
+('Maine Coon', 'Reina', '2021-12-30', 'Hembra', 6.5, 'Grande'),
+('Angora', 'Blanca', '2022-03-08', 'Hembra', 3.5, 'Mediano'),
+('Angora', 'Fluffy', '2021-10-22', 'Macho', 4.0, 'Mediano'),
+('Loro', 'Paco', '2018-05-11', 'Macho', 0.40, N'Pequeño'),
+('Loro', 'Verde', '2019-08-23', 'Hembra', 0.30, N'Pequeño'),
+('Canario', 'Sol', '2022-02-14', 'Macho', 0.02, N'Pequeño'),
+('Canario', 'Pio', '2023-04-01', 'Hembra', 0.02, N'Pequeño'),
+(N'Cacatúa', 'Nieve', '2020-11-05', 'Hembra', 0.35, N'Pequeño'),
+(N'Cacatúa', 'Rocky', '2019-03-28', 'Macho', 0.40, N'Pequeño'),
+('Periquito', 'Azul', '2023-06-10', 'Macho', 0.03, N'Pequeño'),
+('Periquito', 'Verdecito', '2022-08-15', 'Hembra', 0.03, N'Pequeño'),
+('Agapornis', 'Amor', '2022-01-30', 'Hembra', 0.05, N'Pequeño'),
+('Agapornis', 'Pico', '2021-07-17', 'Macho', 0.05, N'Pequeño'),
+(N'Hámster Sirio', 'Bolita', '2023-03-12', 'Macho', 0.15, N'Pequeño'),
+(N'Hámster Sirio', 'Canela', '2022-10-05', 'Hembra', 0.13, N'Pequeño'),
+('Cobaya', 'Manchas', '2021-05-20', 'Macho', 1.10, N'Pequeño'),
+('Cobaya', 'Trebol', '2022-07-14', 'Hembra', 0.90, N'Pequeño'),
+('Chinchilla', 'Gris', '2020-04-08', 'Macho', 0.60, N'Pequeño'),
+('Chinchilla', 'Suave', '2021-09-19', 'Hembra', 0.50, N'Pequeño'),
+('Rata Fancy', 'Raton', '2023-01-25', 'Macho', 0.35, N'Pequeño'),
+('Rata Fancy', 'Noche', '2022-06-30', 'Hembra', 0.28, N'Pequeño'),
+('Jerbo', 'Salto', '2023-05-03', 'Macho', 0.08, N'Pequeño'),
+('Jerbo', 'Arena', '2022-11-11', 'Hembra', 0.07, N'Pequeño'),
+(N'Holandés', 'Dutch', '2021-02-18', 'Macho', 2.0, N'Pequeño'),
+(N'Holandés', 'Mochi', '2022-04-27', 'Hembra', 1.8, N'Pequeño'),
+('Angora', 'Algodon', '2020-08-09', 'Macho', 3.5, 'Mediano'),
+('Angora', 'Lana', '2021-11-14', 'Hembra', 3.2, 'Mediano'),
+('Rex', 'Terciopelo', '2022-07-21', 'Macho', 4.0, 'Mediano'),
+('Rex', 'Suavecito', '2023-03-05', 'Hembra', 3.5, 'Mediano'),
+('Lionhead', 'Melena', '2022-09-16', 'Macho', 1.8, N'Pequeño'),
+('Lionhead', 'Leon', '2021-04-02', 'Hembra', 1.6, N'Pequeño'),
+('Mini Lop', 'Orejon', '2023-02-28', 'Macho', 2.2, N'Pequeño'),
+('Mini Lop', 'Floppy', '2022-06-13', 'Hembra', 2.0, N'Pequeño'),
+(N'Dragón Barbudo', 'Spike', '2021-01-15', 'Macho', 0.45, 'Mediano'),
+('Gecko Leopardo', 'Spot', '2022-03-22', 'Hembra', 0.07, N'Pequeño'),
+('Iguana Verde', 'Verde', '2020-06-30', 'Macho', 3.50, 'Grande'),
+('Betta', 'Escarlata', '2023-01-10', 'Macho', 0.01, N'Pequeño'),
+('Goldfish', 'Naranja', '2022-05-18', 'Hembra', 0.05, N'Pequeño'),
+('Guppy', 'Colores', '2023-04-05', 'Macho', 0.01, N'Pequeño'),
+(N'Hurón Estándar', 'Bandido', '2021-09-07', 'Macho', 1.2, N'Pequeño'),
+(N'Hurón Angora', 'Pelin', '2022-12-19', 'Hembra', 0.9, N'Pequeño'),
+(N'Hurón Albino', 'Blanco', '2023-02-01', 'Macho', 1.0, N'Pequeño'),
+('Axolotl', 'Axo', '2022-08-14', 'Macho', 0.3, N'Pequeño'),
+('Rana Africana', 'Croac', '2021-11-28', 'Hembra', 0.08, N'Pequeño'),
+('Salamandra Tigre', 'Tigresa', '2020-07-03', 'Hembra', 0.12, N'Pequeño'),
+(N'Caballo Árabe', 'Trueno', '2018-03-25', 'Macho', 450, 'Grande'),
+('Poni Shetland', 'Pony', '2019-10-11', 'Hembra', 180, 'Mediano'),
+('Burro Andaluz', 'Burrito', '2017-06-16', 'Macho', 200, 'Mediano'),
+('Cerdo Vietnamita', 'Chanchito', '2021-04-14', 'Macho', 45, 'Mediano'),
+('Duroc', 'Rosado', '2020-01-22', 'Hembra', 120, 'Grande'),
+('Landrace', 'Oink', '2019-08-30', 'Macho', 150, 'Grande'),
+('Merino', 'Lana', '2020-11-17', 'Hembra', 55, 'Mediano'),
+('Suffolk', 'Negrita', '2021-03-04', 'Hembra', 70, 'Mediano'),
+('Dorper', 'Borrego', '2022-07-09', 'Macho', 65, 'Mediano');
+
+DECLARE @TP INT = (SELECT COUNT(*) FROM #TempPropietarios);
+
+INSERT INTO pacientes.mascotas (id_propietario, id_raza, nombre_m, fecha_nacimiento, sexo_m, peso_m, tamanio_m)
+SELECT 
+    (SELECT id_propietario FROM #TempPropietarios WHERE RowID = ((mn.Secuencia - 1) % @TP) + 1),
+    r.id_raza,
+    mn.nombre_m,
+    mn.fecha_nacimiento,
+    mn.sexo_m,
+    mn.peso_m,
+    mn.tamanio_m
+FROM #MascotasNuevas mn
+INNER JOIN #TempRazas r ON mn.nombre_r = r.nombre_r;
+
+DROP TABLE #MascotasNuevas;
+DROP TABLE #TempRazas;
+DROP TABLE #TempPropietarios;
 GO
 
 -- ============================================================
@@ -250,11 +297,11 @@ VALUES ('Medicina General Veterinaria', N'Atención médica integral para animal
        (N'Etología Veterinaria', 'Estudio y tratamiento de problemas de comportamiento animal.'),
        (N'Anestesiología Veterinaria', N'Administración y monitoreo de anestesia.'),
        ('Medicina Preventiva', N'Vacunación, desparasitación y control sanitario.'),
-       (N'Reproducción Animal', 'Manejo reproductivo y fertilidad animal.'),
+       ('Reproducción Animal', 'Manejo reproductivo y fertilidad animal.'),
        (N'Medicina de Animales Exóticos', N'Atención de reptiles, aves y pequeños mamíferos.'),
        ('Urgencias Veterinarias', N'Atención de emergencias médicas y quirúrgicas.'),
-       (N'Diagnóstico por Imágenes', N'Radiografías, ecografías y otros estudios diagnósticos.'),
-       (N'Fisioterapia y Rehabilitación', N'Recuperación funcional tras lesiones o cirugías.');
+       ('Diagnóstico por Imágenes', N'Radiografías, ecografías y otros estudios diagnósticos.'),
+       ('Fisioterapia y Rehabilitación', N'Recuperación funcional tras lesiones o cirugías.');
 GO
 
 -- ============================================================
@@ -304,7 +351,7 @@ VALUES ((SELECT id_especialidad FROM personal.especialidades WHERE nombre_esp = 
 GO
 
 -- ============================================================
--- 11° INSERT: medicamentos (30)
+-- 7° INSERT: medicamentos (30)
 -- ============================================================
 INSERT INTO farmacia.medicamentos (nombre_m, presentacion_m, laboratorio_m, precio_m, stock_m)
 VALUES ('Epiotic Complete', N'Suspensión ótica 125ml', 'Virbac', 18.50, 25),
@@ -340,7 +387,7 @@ VALUES ('Epiotic Complete', N'Suspensión ótica 125ml', 'Virbac', 18.50, 25),
 GO
 
 -- ============================================================
--- 7° INSERT: citas (50)
+-- 8° INSERT: citas (50)
 -- ============================================================
 INSERT INTO clinica.citas (id_mascota, id_veterinario, fecha_c, motivo_c, estado_c, costo_c)
 VALUES 
@@ -397,7 +444,7 @@ VALUES
 GO
 
 -- ============================================================
--- 8° INSERT: diagnósticos (40)
+-- 9° INSERT: diagnósticos (40)
 -- ============================================================
 INSERT INTO clinica.diagnosticos (id_cita, descripcion_d, observaciones_d, fecha_d)
 VALUES 
@@ -444,7 +491,7 @@ VALUES
 GO
 
 -- ============================================================
--- 9° INSERT: procedimientos (40)
+-- 10° INSERT: procedimientos (40)
 -- ============================================================
 INSERT INTO clinica.procedimientos (id_diagnostico, nombre_p, descripcion_p, costo_p)
 VALUES
@@ -452,7 +499,7 @@ VALUES
     (2,  N'Revisión física pre-vacunación', N'Exploración de ganglios y temperatura.', 10.00),
     (4,  'Fluidoterapia ambulatoria', N'Administración de solución Hartman intravenosa.', 25.00),
     (5,  'Hemograma completo de control', N'Evaluación de rutina de células sanguíneas.', 15.00),
-    (6,  'Raspado de piel superficial', N'Toma de muestra para descarte de ectoparásitos.', 10.00),
+    (6,  N'Raspado de piel superficial', N'Toma de muestra para descarte de ectoparásitos.', 10.00),
     (7,  N'Coprológico por flotación', N'Examen de descarte de parásitos gastrointestinales.', 10.00),
     (8,  N'Limpieza dental preventiva básica', N'Eliminación manual de placa dental incipiente.', 20.00),
     (9,  N'Prueba rápida Triple Felina', 'Descarte de Leucemia, SIDA y Panleucopenia.', 35.00),
@@ -471,7 +518,7 @@ VALUES
     (21, N'Prueba rápida Triple Felina', 'Descarte de Leucemia, SIDA y Panleucopenia en felino con cuadro respiratorio.', 35.00),
     (22, N'Radiografía de tórax', N'Dos proyecciones para evaluación de campo pulmonar.', 30.00),
     (23, N'Auscultación cardiopulmonar ampliada', N'Evaluación de ruidos pulmonares con estetoscopio digital.', 12.00),
-    (24, 'Raspado de piel superficial', N'Toma de muestra para identificación de ectoparásitos.', 10.00),
+    (24, N'Raspado de piel superficial', N'Toma de muestra para identificación de ectoparásitos.', 10.00),
     (25, N'Citología de piel', N'Tinción e identificación microscópica de levaduras y cocos.', 12.00),
     (26, N'Prueba de alergia intradérmica', N'Evaluación de hipersensibilidad cutánea por sospecha de sarna.', 45.00),
     (27, N'Revisión física pre-vacunación', N'Exploración de ganglios, temperatura y mucosas.', 10.00),
@@ -491,7 +538,7 @@ VALUES
 GO
 
 -- ============================================================
--- 10° INSERT: tratamiento (40)
+-- 11° INSERT: tratamiento (40)
 -- ============================================================
 INSERT INTO clinica.tratamiento (id_diagnostico, fecha_inicio, fecha_fin, descripcion_t, indicaciones_t)
 VALUES 
@@ -563,14 +610,14 @@ VALUES
        (15, 5, '1 tableta masticable total', N'Dosis única', 1),
        (16, 19, N'1.0 ml suspensión vía oral', 'Cada 12 horas', 10),
        (21, 2,  N'5 ml jarabe vía oral', 'Cada 12 horas', 7), 
-       (22, 9,  N'1 tableta vía oral', 'Cada 12 horas', 7),   
-       (22, 8,  N'8 gotas vía oral', 'Cada 24 horas', 5),   
-       (23, 3,  N'1.5 ml vía oral', 'Cada 12 horas', 7),   
+       (22, 9,  N'1 tableta vía oral', 'Cada 12 horas', 7),    
+       (22, 8,  N'8 gotas vía oral', 'Cada 24 horas', 5),    
+       (23, 3,  N'1.5 ml vía oral', 'Cada 12 horas', 7),    
        (24, 4,  '1 tableta masticable total', N'Dosis única', 1),  
        (25, 11, N'Baño completo dos veces por semana', N'Cada 3 días', 14),  
        (26, 16, N'1/2 tableta vía oral', 'Cada 24 horas', 14),  
-       (27, 5,  '1 tableta masticable total', N'Dosis única', 1),   
-       (28, 19, N'1.0 ml suspensión vía oral', 'Cada 12 horas', 7),   
+       (27, 5,  '1 tableta masticable total', N'Dosis única', 1), 
+       (28, 19, N'1.0 ml suspensión vía oral', 'Cada 12 horas', 7),    
        (29, 7,  N'1 tableta vía oral', 'Cada 24 horas', 7),
        (31, 21, N'1 tableta vía oral', 'Cada 24 horas', 5),
        (32, 22, N'1/2 tableta vía oral', 'Cada 24 horas', 14),
@@ -675,4 +722,13 @@ VALUES
 (30, 50, NULL, NULL, NULL, N'Costo de atención - Control nutricional', 1, 20.00),
 (30, NULL, NULL, NULL, 40, N'Procedimiento Clínico: Control nutricional', 1, 18.00),
 (30, NULL, 25, 40, NULL, 'Medicamento Recetado: Omeprazol Vet', 1, 9.80);
+GO
+
+-- ============================================================
+-- REACTIVAR Y VALIDAR RESTRICCIONES DE LLAVES FORÁNEAS
+-- ============================================================
+EXEC sp_MSforeachtable 'ALTER TABLE ? WITH CHECK CHECK CONSTRAINT ALL';
+GO
+
+PRINT '¡Base de datos poblada exitosamente sin conflictos de FK!';
 GO

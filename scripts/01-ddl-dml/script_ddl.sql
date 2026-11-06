@@ -5,7 +5,7 @@
 -- ============================================================
 
 -- PARA ELIMINAR LA BASE DE DATOS (opcional, descomentar si se requiere)
--- USE master;
+ --USE master;
 -- GO
 -- ALTER DATABASE db_veterinaria SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
 -- GO
@@ -133,7 +133,6 @@ GO
 
 
 -- 7. citas
--- ✅ FIX: se quitó GETDATE() del CHECK. Se valida por trigger AFTER.
 
 CREATE TABLE clinica.citas (
     id_cita           BIGINT         IDENTITY(1,1) NOT NULL,
@@ -297,10 +296,6 @@ GO
 
 -- ============================================================
 -- 14. detalles_facturas (ENTIDAD DÉBIL)
--- ✅ FIX 1: chk_un_solo_item corregido (permite exactamente UNA referencia,
---          o bien la combinación medicamento+tratamiento que indica tu lógica).
--- ✅ FIX 2: ON DELETE SET NULL cambia a NO ACTION para no violar chk_un_solo_item.
--- ============================================================
 CREATE TABLE facturacion.detalles_facturas (
     id_detalle_factura  BIGINT           NOT NULL CONSTRAINT df_df_id_detalle DEFAULT 0,
     id_factura          BIGINT           NOT NULL,
