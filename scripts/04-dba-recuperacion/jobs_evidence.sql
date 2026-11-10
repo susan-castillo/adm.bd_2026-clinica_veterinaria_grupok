@@ -8,6 +8,8 @@ EXEC msdb.dbo.sp_start_job @job_name = N'FastPaws - Backup FULL semanal';
 WAITFOR DELAY '00:00:20';     -- aumentar si la base crece
 EXEC msdb.dbo.sp_start_job @job_name = N'FastPaws - Backup DIFERENCIAL diario';
 WAITFOR DELAY '00:00:20';
+EXEC msdb.dbo.sp_start_job @job_name = N'FastPaws - Backup LOG 15 min';
+WAITFOR DELAY '00:00:20';
   
 SELECT j.name AS job,
        msdb.dbo.agent_datetime(h.run_date, h.run_time) AS inicio,
