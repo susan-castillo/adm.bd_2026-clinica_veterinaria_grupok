@@ -1,7 +1,12 @@
-﻿-- 01. DDL: estructura original, sin triggers ni datos.
--- Ejecutar una sola vez en una base sin estas tablas.
--- Si ya tiene las 14 tablas del DDL suministrado, omita este archivo.
--- No elimina ni recrea una base existente.
+﻿-- PARA ELIMINAR LA BASE DE DATOS
+--USE master;
+-- GO
+-- ALTER DATABASE db_veterinaria SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+-- GO
+-- DROP DATABASE db_veterinaria;
+-- GO
+
+-- 01. DDL: estructura original, sin triggers ni datos.
 IF DB_ID(N'db_veterinaria') IS NULL
     EXEC(N'CREATE DATABASE db_veterinaria');
 GO

@@ -4,12 +4,6 @@
 -- especialidades 20; veterinario 40; medicamentos 30; citas 71;
 -- diagnosticos 40; procedimientos 40; tratamiento 40;
 -- detalles_tratamientos 40; facturas 30; detalles_facturas 50.
--- Los porcentajes de crecimiento del documento son supuestos futuros,
--- no proporciones obligatorias de este conjunto inicial de prueba.
--- IMPORTANTE: @RecrearDatos = 1 BORRA los datos de las 14 tablas y los recarga.
--- Ejecutar TODO en SSMS sobre una base de práctica, sin usuarios concurrentes.
--- @RecrearDatos = 0 permite cargar únicamente si las 14 tablas están vacías.
--- Datos sintéticos para integridad relacional, no prescripciones veterinarias.
 -- Ejecutar antes 02_Triggers_Veterinaria.sql. Este archivo no crea ni modifica triggers.
 USE db_veterinaria;
 GO
