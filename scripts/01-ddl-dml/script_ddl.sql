@@ -1,18 +1,9 @@
-﻿-- ============================================================
--- SCRIPT DDL - Sistema de Gestión Veterinaria
--- Versión T-SQL (SQL Server 2017+), migrada desde PostgreSQL
--- Versión corregida: compila y se ejecuta sin errores
--- ============================================================
-
--- PARA ELIMINAR LA BASE DE DATOS (opcional, descomentar si se requiere)
- --USE master;
--- GO
--- ALTER DATABASE db_veterinaria SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
--- GO
--- DROP DATABASE db_veterinaria;
--- GO
-
-CREATE DATABASE db_veterinaria;
+﻿-- 01. DDL: estructura original, sin triggers ni datos.
+-- Ejecutar una sola vez en una base sin estas tablas.
+-- Si ya tiene las 14 tablas del DDL suministrado, omita este archivo.
+-- No elimina ni recrea una base existente.
+IF DB_ID(N'db_veterinaria') IS NULL
+    EXEC(N'CREATE DATABASE db_veterinaria');
 GO
 USE db_veterinaria;
 GO
@@ -20,11 +11,16 @@ GO
 
 -- ESQUEMAS
 
-CREATE SCHEMA pacientes   AUTHORIZATION dbo; GO
-CREATE SCHEMA personal    AUTHORIZATION dbo; GO
-CREATE SCHEMA clinica     AUTHORIZATION dbo; GO
-CREATE SCHEMA farmacia    AUTHORIZATION dbo; GO
-CREATE SCHEMA facturacion AUTHORIZATION dbo; GO
+CREATE SCHEMA pacientes   AUTHORIZATION dbo;
+GO
+CREATE SCHEMA personal    AUTHORIZATION dbo;
+GO
+CREATE SCHEMA clinica     AUTHORIZATION dbo;
+GO
+CREATE SCHEMA farmacia    AUTHORIZATION dbo;
+GO
+CREATE SCHEMA facturacion AUTHORIZATION dbo;
+GO
 
 -- 1. especies
 

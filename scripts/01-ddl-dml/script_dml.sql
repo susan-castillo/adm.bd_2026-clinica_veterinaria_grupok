@@ -1,48 +1,123 @@
--- ============================================================
--- SCRIPT DML MAESTRO Y BLINDADO - Sistema de Gestión Veterinaria
--- Base de datos: db_veterinaria
--- ============================================================
-
+-- DML de prueba compatible con el DDL y los triggers separados.
+-- Cantidades iniciales del dimensionamiento del documento:
+-- especies 17; razas 61; propietarios 20; mascotas 71;
+-- especialidades 20; veterinario 40; medicamentos 30; citas 71;
+-- diagnosticos 40; procedimientos 40; tratamiento 40;
+-- detalles_tratamientos 40; facturas 30; detalles_facturas 50.
+-- Los porcentajes de crecimiento del documento son supuestos futuros,
+-- no proporciones obligatorias de este conjunto inicial de prueba.
+-- IMPORTANTE: @RecrearDatos = 1 BORRA los datos de las 14 tablas y los recarga.
+-- Ejecutar TODO en SSMS sobre una base de práctica, sin usuarios concurrentes.
+-- @RecrearDatos = 0 permite cargar únicamente si las 14 tablas están vacías.
+-- Datos sintéticos para integridad relacional, no prescripciones veterinarias.
+-- Ejecutar antes 02_Triggers_Veterinaria.sql. Este archivo no crea ni modifica triggers.
 USE db_veterinaria;
 GO
-
--- ============================================================
--- 0. DESACTIVAR RESTRICCIONES Y LIMPIAR DATOS
--- ============================================================
-EXEC sp_MSforeachtable 'ALTER TABLE ? NOCHECK CONSTRAINT ALL';
-GO
-
-DELETE FROM facturacion.detalles_facturas;
-DELETE FROM facturacion.facturas;
-DELETE FROM clinica.detalles_tratamientos;
-DELETE FROM clinica.tratamiento;
-DELETE FROM clinica.procedimientos;
-DELETE FROM clinica.diagnosticos;
-DELETE FROM clinica.citas;
-DELETE FROM pacientes.mascotas;
-DELETE FROM pacientes.propietarios;
-DELETE FROM personal.veterinario;
-DELETE FROM personal.especialidades;
-DELETE FROM pacientes.razas;
-DELETE FROM pacientes.especies;
-DELETE FROM farmacia.medicamentos;
-GO
-
-DBCC CHECKIDENT ('facturacion.facturas', RESEED, 0);
-DBCC CHECKIDENT ('clinica.tratamiento', RESEED, 0);
-DBCC CHECKIDENT ('clinica.procedimientos', RESEED, 0);
-DBCC CHECKIDENT ('clinica.diagnosticos', RESEED, 0);
-DBCC CHECKIDENT ('clinica.citas', RESEED, 0);
-DBCC CHECKIDENT ('pacientes.mascotas', RESEED, 0);
-DBCC CHECKIDENT ('pacientes.propietarios', RESEED, 0);
-DBCC CHECKIDENT ('personal.veterinario', RESEED, 0);
-DBCC CHECKIDENT ('personal.especialidades', RESEED, 0);
-DBCC CHECKIDENT ('pacientes.razas', RESEED, 0);
-DBCC CHECKIDENT ('pacientes.especies', RESEED, 0);
-DBCC CHECKIDENT ('farmacia.medicamentos', RESEED, 0);
-GO
-
--- ============================================================
+SET NOCOUNT ON;
+SET XACT_ABORT ON;
+DECLARE @RecrearDatos bit = 1;
+IF @@TRANCOUNT <> 0
+    THROW 51000, N'Ejecute este archivo fuera de otra transacción.', 1;
+-- Verificar dependencias antes de borrar o insertar datos.
+IF (SELECT COUNT(*) FROM sys.triggers WHERE is_disabled=0 AND object_id IN (
+    OBJECT_ID(N'clinica.tr_antes_insertar_detalle_tratamiento'),
+    OBJECT_ID(N'facturacion.tr_antes_insertar_detalle_factura'),
+    OBJECT_ID(N'facturacion.tr_acumular_total_factura'),
+    OBJECT_ID(N'facturacion.tr_actualizar_inventario_farmacia'),
+    OBJECT_ID(N'pacientes.tr_validar_fecha_nacimiento_mascota'),
+    OBJECT_ID(N'clinica.tr_validar_fecha_cita'),
+    OBJECT_ID(N'clinica.tr_validar_fecha_diagnostico'),
+    OBJECT_ID(N'facturacion.tr_validar_fecha_emision_factura')
+)) <> 8
+    THROW 51006, N'Primero ejecute completo 02_Triggers_Veterinaria.sql.', 1;
+IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE is_disabled=1)
+ OR EXISTS (SELECT 1 FROM sys.check_constraints WHERE is_disabled=1)
+    THROW 51007, N'Hay restricciones deshabilitadas. Reactívelas y valide los datos antes de cargar.', 1;
+BEGIN TRY
+BEGIN TRANSACTION;
+IF @RecrearDatos = 0 AND (
+EXISTS (SELECT 1 FROM facturacion.detalles_facturas) OR
+EXISTS (SELECT 1 FROM facturacion.facturas) OR
+EXISTS (SELECT 1 FROM clinica.detalles_tratamientos) OR
+EXISTS (SELECT 1 FROM clinica.tratamiento) OR
+EXISTS (SELECT 1 FROM clinica.procedimientos) OR
+EXISTS (SELECT 1 FROM clinica.diagnosticos) OR
+EXISTS (SELECT 1 FROM clinica.citas) OR
+EXISTS (SELECT 1 FROM pacientes.mascotas) OR
+EXISTS (SELECT 1 FROM pacientes.propietarios) OR
+EXISTS (SELECT 1 FROM personal.veterinario) OR
+EXISTS (SELECT 1 FROM personal.especialidades) OR
+EXISTS (SELECT 1 FROM pacientes.razas) OR
+EXISTS (SELECT 1 FROM pacientes.especies) OR
+EXISTS (SELECT 1 FROM farmacia.medicamentos))
+    THROW 51001, N'La base contiene datos. La carga se ha cancelado sin borrarlos.', 1;
+IF @RecrearDatos = 1
+BEGIN
+    -- Evita que al retirar detalles una factura Pagada quede temporalmente en cero.
+    UPDATE facturacion.facturas SET estado_f = N'Pendiente' WHERE estado_f = N'Pagada';
+    DELETE FROM facturacion.detalles_facturas;
+    DELETE FROM facturacion.facturas;
+    DELETE FROM clinica.detalles_tratamientos;
+    DELETE FROM clinica.tratamiento;
+    DELETE FROM clinica.procedimientos;
+    DELETE FROM clinica.diagnosticos;
+    DELETE FROM clinica.citas;
+    DELETE FROM pacientes.mascotas;
+    DELETE FROM pacientes.propietarios;
+    DELETE FROM personal.veterinario;
+    DELETE FROM personal.especialidades;
+    DELETE FROM pacientes.razas;
+    DELETE FROM pacientes.especies;
+    DELETE FROM farmacia.medicamentos;
+END;
+IF EXISTS (SELECT 1 FROM sys.identity_columns WHERE object_id=OBJECT_ID(N'facturacion.facturas') AND last_value IS NULL)
+    DBCC CHECKIDENT ('facturacion.facturas', RESEED, 1) WITH NO_INFOMSGS;
+ELSE
+    DBCC CHECKIDENT ('facturacion.facturas', RESEED, 0) WITH NO_INFOMSGS;
+IF EXISTS (SELECT 1 FROM sys.identity_columns WHERE object_id=OBJECT_ID(N'clinica.tratamiento') AND last_value IS NULL)
+    DBCC CHECKIDENT ('clinica.tratamiento', RESEED, 1) WITH NO_INFOMSGS;
+ELSE
+    DBCC CHECKIDENT ('clinica.tratamiento', RESEED, 0) WITH NO_INFOMSGS;
+IF EXISTS (SELECT 1 FROM sys.identity_columns WHERE object_id=OBJECT_ID(N'clinica.procedimientos') AND last_value IS NULL)
+    DBCC CHECKIDENT ('clinica.procedimientos', RESEED, 1) WITH NO_INFOMSGS;
+ELSE
+    DBCC CHECKIDENT ('clinica.procedimientos', RESEED, 0) WITH NO_INFOMSGS;
+IF EXISTS (SELECT 1 FROM sys.identity_columns WHERE object_id=OBJECT_ID(N'clinica.diagnosticos') AND last_value IS NULL)
+    DBCC CHECKIDENT ('clinica.diagnosticos', RESEED, 1) WITH NO_INFOMSGS;
+ELSE
+    DBCC CHECKIDENT ('clinica.diagnosticos', RESEED, 0) WITH NO_INFOMSGS;
+IF EXISTS (SELECT 1 FROM sys.identity_columns WHERE object_id=OBJECT_ID(N'clinica.citas') AND last_value IS NULL)
+    DBCC CHECKIDENT ('clinica.citas', RESEED, 1) WITH NO_INFOMSGS;
+ELSE
+    DBCC CHECKIDENT ('clinica.citas', RESEED, 0) WITH NO_INFOMSGS;
+IF EXISTS (SELECT 1 FROM sys.identity_columns WHERE object_id=OBJECT_ID(N'pacientes.mascotas') AND last_value IS NULL)
+    DBCC CHECKIDENT ('pacientes.mascotas', RESEED, 1) WITH NO_INFOMSGS;
+ELSE
+    DBCC CHECKIDENT ('pacientes.mascotas', RESEED, 0) WITH NO_INFOMSGS;
+IF EXISTS (SELECT 1 FROM sys.identity_columns WHERE object_id=OBJECT_ID(N'pacientes.propietarios') AND last_value IS NULL)
+    DBCC CHECKIDENT ('pacientes.propietarios', RESEED, 1) WITH NO_INFOMSGS;
+ELSE
+    DBCC CHECKIDENT ('pacientes.propietarios', RESEED, 0) WITH NO_INFOMSGS;
+IF EXISTS (SELECT 1 FROM sys.identity_columns WHERE object_id=OBJECT_ID(N'personal.veterinario') AND last_value IS NULL)
+    DBCC CHECKIDENT ('personal.veterinario', RESEED, 1) WITH NO_INFOMSGS;
+ELSE
+    DBCC CHECKIDENT ('personal.veterinario', RESEED, 0) WITH NO_INFOMSGS;
+IF EXISTS (SELECT 1 FROM sys.identity_columns WHERE object_id=OBJECT_ID(N'personal.especialidades') AND last_value IS NULL)
+    DBCC CHECKIDENT ('personal.especialidades', RESEED, 1) WITH NO_INFOMSGS;
+ELSE
+    DBCC CHECKIDENT ('personal.especialidades', RESEED, 0) WITH NO_INFOMSGS;
+IF EXISTS (SELECT 1 FROM sys.identity_columns WHERE object_id=OBJECT_ID(N'pacientes.razas') AND last_value IS NULL)
+    DBCC CHECKIDENT ('pacientes.razas', RESEED, 1) WITH NO_INFOMSGS;
+ELSE
+    DBCC CHECKIDENT ('pacientes.razas', RESEED, 0) WITH NO_INFOMSGS;
+IF EXISTS (SELECT 1 FROM sys.identity_columns WHERE object_id=OBJECT_ID(N'pacientes.especies') AND last_value IS NULL)
+    DBCC CHECKIDENT ('pacientes.especies', RESEED, 1) WITH NO_INFOMSGS;
+ELSE
+    DBCC CHECKIDENT ('pacientes.especies', RESEED, 0) WITH NO_INFOMSGS;
+IF EXISTS (SELECT 1 FROM sys.identity_columns WHERE object_id=OBJECT_ID(N'farmacia.medicamentos') AND last_value IS NULL)
+    DBCC CHECKIDENT ('farmacia.medicamentos', RESEED, 1) WITH NO_INFOMSGS;
+ELSE
+    DBCC CHECKIDENT ('farmacia.medicamentos', RESEED, 0) WITH NO_INFOMSGS;
 -- 1° INSERT: especies (17)
 -- ============================================================
 INSERT INTO pacientes.especies (nombre_e, descripcion_e)
@@ -63,7 +138,6 @@ VALUES ('Can', N'Mamífero doméstico de la familia Canidae, comúnmente conocid
        ('Primate', N'Orden de mamíferos que incluye monos y simios, de alta inteligencia.'),
        ('Marsupial', N'Mamífero que da a luz crías inmaduras y las desarrolla en una bolsa ventral.'),
        (N'Arácnido', N'Artrópodo de ocho patas, incluye arañas y escorpiones.');
-GO
 
 -- ============================================================
 -- 2° INSERT: razas (61)
@@ -131,7 +205,6 @@ VALUES
 ((SELECT id_especie FROM pacientes.especies WHERE nombre_e = N'Arácnido'), N'Tarántula Rosa'),
 ((SELECT id_especie FROM pacientes.especies WHERE nombre_e = N'Arácnido'), N'Escorpión Emperador'),
 ((SELECT id_especie FROM pacientes.especies WHERE nombre_e = N'Arácnido'), N'Tarántula Patas Rojas');
-GO
 
 -- ============================================================
 -- 3° INSERT: propietarios (20) - Con captura de IDs para escalabilidad
@@ -166,10 +239,9 @@ VALUES ('01234567-8', 'Adriana', N'Mejía', 'F', '7123-4567', '2234-5678', 'adri
        ('10123456-7', 'Daniela', 'Ortiz', 'F', '7492-3456', '2323-4567', 'daniela.ortiz@gmail.com', N'Colonia Escalón, San Salvador');
 
 IF OBJECT_ID('tempdb..#TempRazas') IS NOT NULL DROP TABLE #TempRazas;
-CREATE TABLE #TempRazas (nombre_r VARCHAR(100), id_raza INT);
+CREATE TABLE #TempRazas (nombre_r NVARCHAR(100), id_raza INT);
 INSERT INTO #TempRazas (nombre_r, id_raza)
 SELECT nombre_r, id_raza FROM pacientes.razas;
-GO
 
 -- ============================================================
 -- 4° INSERT: mascotas (71) - Escalable con asignación modular rotativa
@@ -177,8 +249,8 @@ GO
 IF OBJECT_ID('tempdb..#MascotasNuevas') IS NOT NULL DROP TABLE #MascotasNuevas;
 CREATE TABLE #MascotasNuevas (
     Secuencia INT IDENTITY(1,1),
-    nombre_r VARCHAR(100),
-    nombre_m VARCHAR(50),
+    nombre_r NVARCHAR(100),
+    nombre_m NVARCHAR(100),
     fecha_nacimiento DATE,
     sexo_m VARCHAR(10),
     peso_m DECIMAL(5,2),
@@ -261,9 +333,11 @@ VALUES
 
 DECLARE @TP INT = (SELECT COUNT(*) FROM #TempPropietarios);
 
-INSERT INTO pacientes.mascotas (id_propietario, id_raza, nombre_m, fecha_nacimiento, sexo_m, peso_m, tamanio_m)
+SET IDENTITY_INSERT pacientes.mascotas ON;
+INSERT INTO pacientes.mascotas (id_mascota, id_propietario, id_raza, nombre_m, fecha_nacimiento, sexo_m, peso_m, tamanio_m)
 SELECT 
-    (SELECT id_propietario FROM #TempPropietarios WHERE RowID = ((mn.Secuencia - 1) % @TP) + 1),
+    mn.Secuencia,
+    (SELECT id_propietario FROM #TempPropietarios WHERE id_propietario = ((mn.Secuencia - 1) % @TP) + 1),
     r.id_raza,
     mn.nombre_m,
     mn.fecha_nacimiento,
@@ -271,12 +345,17 @@ SELECT
     mn.peso_m,
     mn.tamanio_m
 FROM #MascotasNuevas mn
-INNER JOIN #TempRazas r ON mn.nombre_r = r.nombre_r;
+INNER JOIN #TempRazas r ON mn.nombre_r = r.nombre_r
+INNER JOIN pacientes.razas rr ON rr.id_raza = r.id_raza
+INNER JOIN pacientes.especies ee ON ee.id_especie = rr.id_especie
+WHERE mn.nombre_r <> N'Angora'
+   OR (mn.nombre_m IN (N'Blanca', N'Fluffy') AND ee.nombre_e = N'Felino')
+   OR (mn.nombre_m IN (N'Algodon', N'Lana') AND ee.nombre_e = N'Conejo');
 
+SET IDENTITY_INSERT pacientes.mascotas OFF;
 DROP TABLE #MascotasNuevas;
 DROP TABLE #TempRazas;
 DROP TABLE #TempPropietarios;
-GO
 
 -- ============================================================
 -- 5° INSERT: especialidades (20)
@@ -302,7 +381,6 @@ VALUES ('Medicina General Veterinaria', N'Atención médica integral para animal
        ('Urgencias Veterinarias', N'Atención de emergencias médicas y quirúrgicas.'),
        ('Diagnóstico por Imágenes', N'Radiografías, ecografías y otros estudios diagnósticos.'),
        ('Fisioterapia y Rehabilitación', N'Recuperación funcional tras lesiones o cirugías.');
-GO
 
 -- ============================================================
 -- 6° INSERT: veterinario (40)
@@ -348,7 +426,6 @@ VALUES ((SELECT id_especialidad FROM personal.especialidades WHERE nombre_esp = 
        ((SELECT id_especialidad FROM personal.especialidades WHERE nombre_esp = N'Diagnóstico por Imágenes'), 'Melissa', 'Pineda', '7000-0038', 'melissa.pineda@veterinaria.com'),
        ((SELECT id_especialidad FROM personal.especialidades WHERE nombre_esp = N'Fisioterapia y Rehabilitación'), 'Cristian', N'Durán', '7000-0039', 'cristian.duran@veterinaria.com'),
        ((SELECT id_especialidad FROM personal.especialidades WHERE nombre_esp = N'Fisioterapia y Rehabilitación'), 'Alejandra', 'Escobar', '7000-0040', 'alejandra.escobar@veterinaria.com');
-GO
 
 -- ============================================================
 -- 7° INSERT: medicamentos (30)
@@ -384,7 +461,6 @@ VALUES ('Epiotic Complete', N'Suspensión ótica 125ml', 'Virbac', 18.50, 25),
        ('Rimadyl', N'Blíster 14 tabletas 50mg', 'Zoetis', 26.00, 22),
        ('Metronidazol Vet', 'Caja 20 tabletas 250mg', 'Drag Pharma', 14.50, 35),
        (N'Mupirocina Ungüento', 'Tubo 15g', 'Calox', 8.90, 28);
-GO
 
 -- ============================================================
 -- 8° INSERT: citas (50)
@@ -436,12 +512,11 @@ VALUES
        (43, 8, '2025-09-05 14:00:00', N'Reprogramación solicitada', 'Cancelada', 0.00),
        (44, 9, '2025-10-20 10:30:00', 'Ausencia del propietario', 'Cancelada', 0.00),
        (45, 10, '2025-11-12 15:00:00', N'Cancelación administrativa', 'Cancelada', 0.00),
-       (46, 11, '2026-11-12 09:00:00', N'Vacunación programada', 'Programada', 25.00),
-       (47, 12, '2026-11-15 14:00:00', 'Chequeo preventivo programado', 'Programada', 20.00),
-       (48, 13, '2026-11-18 10:30:00', 'Control de peso programado', 'Programada', 18.00),
-       (49, 14, '2026-11-20 16:00:00', 'Consulta de seguimiento', 'Programada', 30.00),
-       (50, 15, '2026-11-27 11:00:00', N'Evaluación médica programada', 'Programada', 22.00);
-GO
+       (46, 11, DATEADD(DAY, 2, GETDATE()), N'Vacunación programada', 'Programada', 25.00),
+       (47, 12, DATEADD(DAY, 5, GETDATE()), 'Chequeo preventivo programado', 'Programada', 20.00),
+       (48, 13, DATEADD(DAY, 8, GETDATE()), 'Control de peso programado', 'Programada', 18.00),
+       (49, 14, DATEADD(DAY, 10, GETDATE()), 'Consulta de seguimiento', 'Programada', 30.00),
+       (50, 15, DATEADD(DAY, 17, GETDATE()), N'Evaluación médica programada', 'Programada', 22.00);
 
 -- ============================================================
 -- 9° INSERT: diagnósticos (40)
@@ -488,7 +563,6 @@ VALUES
        (38, N'Sin hallazgos clínicos importantes.', 'Mantener controles preventivos.', '2026-06-17'),
        (39, N'Infección respiratoria leve.', N'Antibióticos y reposo por una semana.', '2026-06-18'),
        (40, 'Estado nutricional aceptable.', 'Mantener dieta recomendada y seguimiento mensual.', '2026-06-18');
-GO
 
 -- ============================================================
 -- 10° INSERT: procedimientos (40)
@@ -535,7 +609,6 @@ VALUES
     (38, N'Desparasitación preventiva', N'Aplicación de antiparasitario interno y externo.', 18.00),
     (39, N'Nebulización', N'Terapia respiratoria para facilitar la eliminación de secreciones.', 20.00),
     (40, 'Control nutricional', N'Seguimiento del plan alimenticio y evaluación del estado corporal.', 18.00);
-GO
 
 -- ============================================================
 -- 11° INSERT: tratamiento (40)
@@ -582,153 +655,221 @@ VALUES
        (38, '2026-06-17', '2026-06-18', N'Control preventivo sin necesidad de tratamiento farmacológico.', 'Continuar con los controles veterinarios de rutina.'),
        (39, '2026-06-18', '2026-06-25', N'Tratamiento para infección respiratoria leve.', N'Administrar antibióticos completos y evitar la exposición al frío.'),
        (40, '2026-06-18', '2026-07-18', 'Seguimiento nutricional y control del peso corporal.', N'Mantener la dieta recomendada y realizar actividad física moderada.');
-GO
 
 -- ============================================================
 -- 12° INSERT: detalles_tratamientos (40)
 -- ============================================================
-INSERT INTO clinica.detalles_tratamientos (id_tratamiento, id_medicamento, dosis_dt, frecuencia_dt, duracion_dias_dt)
+INSERT INTO clinica.detalles_tratamientos (id_detalle_tratamiento, id_tratamiento, id_medicamento, dosis_dt, frecuencia_dt, duracion_dias_dt)
 VALUES 
-       (1, 1, N'5 gotas por oído afectado', 'Cada 12 horas', 7),
-       (1, 19, N'1.5 ml vía oral', 'Cada 12 horas', 7),
-       (2, 19, N'2.0 ml vía oral', 'Cada 12 horas', 5),
-       (2, 3, N'1.0 ml vía oral', 'Cada 8 horas', 3),
-       (3, 4, '1 tableta masticable total', N'Dosis única', 1),
-       (4, 6, N'1/2 tableta vía oral', 'Cada 12 horas', 7),
-       (5, 7, '2 gotas en ojo izquierdo', 'Cada 6 horas', 7),
-       (6, 7, '1 gota en ojo derecho', 'Cada 4 horas', 10),
-       (6, 8, N'6 gotas vía oral', 'Cada 24 horas', 5),
-       (7, 8, N'12 gotas vía oral', 'Cada 24 horas', 5),
-       (7, 14, N'1 cápsula vía oral', 'Cada 12 horas', 10),
-       (8, 10, N'1/2 tableta vía oral', 'Cada 24 horas', 180),
-       (9, 11, N'Baño completo dos por semana', N'Cada 3 días', 14),
-       (10, 12, N'1 tableta y media vía oral', N'Dosis única', 1),
-       (11, 5, '1 tableta masticable total', N'Dosis única', 1),
-       (12, 14, N'1/2 cápsula vía oral', 'Cada 12 horas', 7),
-       (13, 15, N'1/4 tableta vía oral', 'Cada 24 horas', 180),
-       (14, 17, '1 tableta triturada en comida', 'Cada 12 horas', 7),
-       (15, 5, '1 tableta masticable total', N'Dosis única', 1),
-       (16, 19, N'1.0 ml suspensión vía oral', 'Cada 12 horas', 10),
-       (21, 2,  N'5 ml jarabe vía oral', 'Cada 12 horas', 7), 
-       (22, 9,  N'1 tableta vía oral', 'Cada 12 horas', 7),    
-       (22, 8,  N'8 gotas vía oral', 'Cada 24 horas', 5),    
-       (23, 3,  N'1.5 ml vía oral', 'Cada 12 horas', 7),    
-       (24, 4,  '1 tableta masticable total', N'Dosis única', 1),  
-       (25, 11, N'Baño completo dos veces por semana', N'Cada 3 días', 14),  
-       (26, 16, N'1/2 tableta vía oral', 'Cada 24 horas', 14),  
-       (27, 5,  '1 tableta masticable total', N'Dosis única', 1), 
-       (28, 19, N'1.0 ml suspensión vía oral', 'Cada 12 horas', 7),    
-       (29, 7,  N'1 tableta vía oral', 'Cada 24 horas', 7),
-       (31, 21, N'1 tableta vía oral', 'Cada 24 horas', 5),
-       (32, 22, N'1/2 tableta vía oral', 'Cada 24 horas', 14),
-       (33, 30, N'Aplicar una capa fina sobre la lesión', 'Cada 12 horas', 10),
-       (34, 29, N'1 tableta vía oral', 'Cada 12 horas', 7),
-       (35, 27, N'1 cápsula vía oral', 'Cada 24 horas', 21),
-       (36, 28, N'1 tableta vía oral', 'Cada 12 horas', 7),
-       (37, 26, '1 dosis intravenosa', 'Cada 24 horas', 3),
-       (38, 23, '2 gotas en el ojo afectado', 'Cada 8 horas', 7),
-       (39, 24, N'1 tableta vía oral', 'Cada 24 horas', 10),
-       (40, 25, N'1 cápsula vía oral', 'Cada 24 horas', 14);
-GO
+       (1, 1, 1, N'5 gotas por oído afectado', 'Cada 12 horas', 7),
+       (2, 1, 19, N'1.5 ml vía oral', 'Cada 12 horas', 7),
+       (1, 2, 19, N'2.0 ml vía oral', 'Cada 12 horas', 5),
+       (2, 2, 3, N'1.0 ml vía oral', 'Cada 8 horas', 3),
+       (1, 3, 4, '1 tableta masticable total', N'Dosis única', 1),
+       (1, 4, 6, N'1/2 tableta vía oral', 'Cada 12 horas', 7),
+       (1, 5, 7, '2 gotas en ojo izquierdo', 'Cada 6 horas', 7),
+       (1, 6, 7, '1 gota en ojo derecho', 'Cada 4 horas', 10),
+       (2, 6, 8, N'6 gotas vía oral', 'Cada 24 horas', 5),
+       (1, 7, 8, N'12 gotas vía oral', 'Cada 24 horas', 5),
+       (2, 7, 14, N'1 cápsula vía oral', 'Cada 12 horas', 10),
+       (1, 8, 10, N'1/2 tableta vía oral', 'Cada 24 horas', 180),
+       (1, 9, 11, N'Baño completo dos por semana', N'Cada 3 días', 14),
+       (1, 10, 12, N'1 tableta y media vía oral', N'Dosis única', 1),
+       (1, 11, 5, '1 tableta masticable total', N'Dosis única', 1),
+       (1, 12, 14, N'1/2 cápsula vía oral', 'Cada 12 horas', 7),
+       (1, 13, 15, N'1/4 tableta vía oral', 'Cada 24 horas', 180),
+       (1, 14, 17, '1 tableta triturada en comida', 'Cada 12 horas', 7),
+       (1, 15, 5, '1 tableta masticable total', N'Dosis única', 1),
+       (1, 16, 19, N'1.0 ml suspensión vía oral', 'Cada 12 horas', 10),
+       (1, 21, 2,  N'5 ml jarabe vía oral', 'Cada 12 horas', 7), 
+       (1, 22, 9,  N'1 tableta vía oral', 'Cada 12 horas', 7),    
+       (2, 22, 8,  N'8 gotas vía oral', 'Cada 24 horas', 5),    
+       (1, 23, 3,  N'1.5 ml vía oral', 'Cada 12 horas', 7),    
+       (1, 24, 4,  '1 tableta masticable total', N'Dosis única', 1),  
+       (1, 25, 11, N'Baño completo dos veces por semana', N'Cada 3 días', 14),  
+       (1, 26, 16, N'1/2 tableta vía oral', 'Cada 24 horas', 14),  
+       (1, 27, 5,  '1 tableta masticable total', N'Dosis única', 1), 
+       (1, 28, 19, N'1.0 ml suspensión vía oral', 'Cada 12 horas', 7),    
+       (1, 29, 7,  N'1 tableta vía oral', 'Cada 24 horas', 7),
+       (1, 31, 21, N'1 tableta vía oral', 'Cada 24 horas', 5),
+       (1, 32, 22, N'1/2 tableta vía oral', 'Cada 24 horas', 14),
+       (1, 33, 30, N'Aplicar una capa fina sobre la lesión', 'Cada 12 horas', 10),
+       (1, 34, 29, N'1 tableta vía oral', 'Cada 12 horas', 7),
+       (1, 35, 27, N'1 cápsula vía oral', 'Cada 24 horas', 21),
+       (1, 36, 28, N'1 tableta vía oral', 'Cada 12 horas', 7),
+       (1, 37, 26, '1 dosis intravenosa', 'Cada 24 horas', 3),
+       (1, 38, 23, '2 gotas en el ojo afectado', 'Cada 8 horas', 7),
+       (1, 39, 24, N'1 tableta vía oral', 'Cada 24 horas', 10),
+       (1, 40, 25, N'1 cápsula vía oral', 'Cada 24 horas', 14);
 
 -- ============================================================
--- 13° INSERT: facturas (30)
--- ============================================================
+
+-- Alinear fechas de los expedientes con la cita; mantener la duración del plan.
+UPDATE c SET fecha_c = CAST(d.fecha_d AS datetime2), motivo_c = d.descripcion_d,
+    estado_c = N'Completada'
+FROM clinica.citas c JOIN clinica.diagnosticos d ON d.id_cita=c.id_cita;
+UPDATE t SET fecha_fin=DATEADD(DAY,DATEDIFF(DAY,t.fecha_inicio,t.fecha_fin),d.fecha_d),
+    fecha_inicio=d.fecha_d
+FROM clinica.tratamiento t JOIN clinica.diagnosticos d ON d.id_diagnostico=t.id_diagnostico;
+
+-- 21 citas futuras adicionales: completan las 71 citas iniciales
+-- implícitas en la proyección del documento (2071 - 2000).
+-- Sin diagnóstico ni factura mientras permanezcan programadas.
+;WITH adicionales AS (
+    SELECT n FROM (VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10),
+        (11),(12),(13),(14),(15),(16),(17),(18),(19),(20),(21)) v(n)
+)
+INSERT INTO clinica.citas
+    (id_mascota,id_veterinario,fecha_c,motivo_c,estado_c,costo_c)
+SELECT 50+n, n, DATEADD(DAY,30+n,CAST(CAST(GETDATE() AS date) AS datetime2)),
+       N'Control preventivo programado', N'Programada', 20.00
+FROM adicionales;
+
+-- Guardar stock inicial para comprobar que cada unidad se descuenta una sola vez.
+SELECT id_medicamento, stock_m INTO #StockInicial FROM farmacia.medicamentos;
+
+-- 13. Facturar 30 de las 40 citas completadas; las otras 10 quedan sin facturar.
+-- Primero Pendiente y total cero; el trigger calcula el importe.
 INSERT INTO facturacion.facturas (id_cita, fecha_emision_f, estado_f, total_f)
-VALUES (1, '2025-01-10', 'Pendiente', 0),
-       (2, '2025-01-15', 'Pendiente', 0),
-       (3, '2025-01-20', 'Pagada', 18.00),
-       (4, '2025-01-25', 'Pendiente', 0),
-       (5, '2025-02-01', 'Pagada', 22.00),
-       (6, '2025-02-05', 'Pendiente', 0),
-       (7, '2025-02-10', 'Pagada', 20.00),
-       (8, '2025-02-15', 'Pagada', 20.00),
-       (9, '2025-02-20', 'Pagada', 79.50),
-       (10, '2025-02-25', 'Pagada', 25.00),
-       (12, '2025-03-06', 'Pagada', 47.50),
-       (13, '2025-03-10', 'Pagada', 49.20),
-       (14, '2025-03-15', 'Pendiente', 0), 
-       (16, '2025-03-25', 'Pagada', 139.50),
-       (19, '2025-04-10', 'Pagada', 71.00),
-       (24, '2025-05-05', 'Pagada', 61.50),
-       (26, '2025-05-15', 'Pagada', 62.00),
-       (31, '2025-06-11', 'Pendiente', 0), 
-       (34, '2025-06-25', 'Pagada', 109.00),
-       (35, '2025-06-28', 'Pagada', 81.50),
-       (41, '2026-06-15', 'Pendiente', 0), 
-       (42, '2026-06-15', 'Pendiente', 0), 
-       (43, '2026-06-16', 'Pendiente', 0), 
-       (44, '2026-06-16', 'Pendiente', 0), 
-       (45, '2026-06-16', 'Pendiente', 0), 
-       (46, '2026-06-17', 'Pendiente', 0), 
-       (47, '2026-06-17', 'Pendiente', 0), 
-       (48, '2026-06-17', 'Pendiente', 0), 
-       (49, '2026-06-18', 'Pendiente', 0), 
-       (50, '2026-06-18', 'Pendiente', 0); 
-GO
+SELECT id_cita, CAST(fecha_c AS date), N'Pendiente', 0
+FROM clinica.citas WHERE estado_c=N'Completada' AND id_cita BETWEEN 1 AND 30;
 
--- ============================================================
--- 14° INSERT: detalles_facturas (49)
--- ============================================================
-INSERT INTO facturacion.detalles_facturas (id_factura, id_cita, id_medicamento, id_tratamiento, id_procedimiento, descripcion_df, cantidad_df, precio_unit_df)
-VALUES
-(1, 1, NULL, NULL, NULL, N'Costo de atención - Consulta Médica Base', 1, 20.00),
-(1, NULL, NULL, NULL, 1, N'Procedimiento Clínico: Limpieza ótica profunda', 1, 15.00),
-(1, NULL, 1, 1, NULL, 'Medicamento Recetado: Epiotic Complete 125ml', 1, 18.50),
-(1, NULL, 19, 1, NULL, N'Medicamento Recetado: Amoxicilina + AC Suspensión', 1, 16.75),
-(2, 2, NULL, NULL, NULL, N'Costo de atención - Vacunación anual', 1, 25.00),
-(4, 4, NULL, NULL, NULL, N'Costo de atención - Desparasitación clínica', 1, 15.00),
-(4, NULL, NULL, NULL, 2, N'Procedimiento Clínico: Fluidoterapia ambulatoria', 1, 25.00),
-(4, NULL, 19, 2, NULL, 'Medicamento Recetado: Amoxicilina + AC 60ml', 1, 14.25),
-(6, 6, NULL, NULL, NULL, N'Costo de atención - Consulta dermatológica', 1, 30.00),
-(6, NULL, NULL, NULL, 3, N'Procedimiento Clínico: Raspado de piel superficial', 1, 10.00),
-(6, NULL, 4, 3, NULL, 'Medicamento Recetado: Bravecto Pastilla masticable', 1, 38.00),
-(13, 14, NULL, NULL, NULL, N'Costo de atención - Control postoperatorio', 1, 40.00),
-(13, NULL, NULL, NULL, 6, N'Procedimiento Clínico: Radiografía digital de fémur', 1, 40.00),
-(13, NULL, NULL, NULL, 7, N'Procedimiento Quirúrgico: Fijación interna ósea', 1, 350.00),
-(13, NULL, 8, 7, NULL, 'Medicamento Analgésico: Meloxicam Solución gotas', 1, 11.20),
-(13, NULL, 14, 7, NULL, 'Medicamento Antibiótico: Clindamicina 150mg', 1, 16.90),
-(18, 31, NULL, NULL, NULL, N'Costo de atención - Vacunación anual base', 1, 25.00),
-(18, NULL, NULL, NULL, 12, N'Procedimiento Dental: Profilaxis ultrasónica', 1, 60.00),
-(18, NULL, NULL, NULL, 14, N'Procedimiento Quirúrgico: Extracción de incisivo', 3, 20.00),
-(18, NULL, 14, 12, NULL, 'Medicamento Antibiótico: Clindamicina caja', 2, 13.10),
-(21, 41, NULL, NULL, NULL, N'Costo de atención - Consulta médica general', 1, 20.00),
-(21, NULL, NULL, NULL, 31, N'Procedimiento Clínico: Consulta clínica preventiva', 1, 18.00),
-(21, NULL, 21, 31, NULL, 'Medicamento Recetado: Cerenia', 1, 27.50),
-(22, 42, NULL, NULL, NULL, N'Costo de atención - Vacunación anual', 1, 25.00),
-(22, NULL, NULL, NULL, 32, N'Procedimiento Clínico: Aplicación de vacuna séxtuple', 1, 30.00),
-(22, NULL, 22, 32, NULL, 'Medicamento Recetado: Apoquel', 1, 48.00),
-(23, 43, NULL, NULL, NULL, N'Costo de atención - Evaluación nutricional', 1, 20.00),
-(23, NULL, NULL, NULL, 33, N'Procedimiento Clínico: Evaluación nutricional', 1, 20.00),
-(23, NULL, 30, 33, NULL, N'Medicamento Recetado: Mupirocina Ungüento', 1, 8.90),
-(24, 44, NULL, NULL, NULL, N'Costo de atención - Consulta por gastroenteritis', 1, 25.00),
-(24, NULL, NULL, NULL, 34, N'Procedimiento Clínico: Fluidoterapia intravenosa', 1, 35.00),
-(24, NULL, 29, 34, NULL, 'Medicamento Recetado: Metronidazol Vet', 1, 14.50),
-(25, 45, NULL, NULL, NULL, N'Costo de atención - Consulta dermatológica', 1, 30.00),
-(25, NULL, NULL, NULL, 35, N'Procedimiento Clínico: Baño dermatológico medicado', 1, 25.00),
-(25, NULL, 27, 35, NULL, 'Medicamento Recetado: Atopica', 1, 62.00),
-(26, 46, NULL, NULL, NULL, N'Costo de atención - Control postquirúrgico', 1, 30.00),
-(26, NULL, NULL, NULL, 36, N'Procedimiento Clínico: Control postquirúrgico', 1, 22.00),
-(26, NULL, 28, 36, NULL, 'Medicamento Recetado: Rimadyl', 1, 26.00),
-(27, 47, NULL, NULL, NULL, N'Costo de atención - Retiro de suturas', 1, 20.00),
-(27, NULL, NULL, NULL, 37, N'Procedimiento Clínico: Retiro de suturas', 1, 15.00),
-(27, NULL, 26, 37, NULL, 'Medicamento Recetado: Lactato de Ringer', 1, 6.50),
-(28, 48, NULL, NULL, NULL, N'Costo de atención - Consulta preventiva', 1, 20.00),
-(28, NULL, NULL, NULL, 38, N'Procedimiento Clínico: Desparasitación preventiva', 1, 18.00),
-(28, NULL, 23, 38, NULL, 'Medicamento Recetado: Aureomicina Oftálmica', 1, 11.50),
-(29, 49, NULL, NULL, NULL, N'Costo de atención - Consulta respiratoria', 1, 25.00),
-(29, NULL, NULL, NULL, 39, N'Procedimiento Clínico: Nebulización', 1, 20.00),
-(29, NULL, 24, 39, NULL, 'Medicamento Recetado: Baytril', 1, 18.75),
-(30, 50, NULL, NULL, NULL, N'Costo de atención - Control nutricional', 1, 20.00),
-(30, NULL, NULL, NULL, 40, N'Procedimiento Clínico: Control nutricional', 1, 18.00),
-(30, NULL, 25, 40, NULL, 'Medicamento Recetado: Omeprazol Vet', 1, 9.80);
-GO
+-- 14. Exactamente 50 líneas: 30 consultas, 10 procedimientos y 10 medicamentos.
+-- Solo se incluyen servicios y medicamentos del expediente de cada factura.
+-- Los demás procedimientos/medicamentos permanecen sin facturar en esta muestra.
+;WITH procedimientos_a_facturar AS (
+    SELECT TOP (10) p.id_procedimiento
+    FROM clinica.procedimientos p
+    JOIN clinica.diagnosticos d ON d.id_diagnostico=p.id_diagnostico
+    JOIN facturacion.facturas f ON f.id_cita=d.id_cita
+    ORDER BY p.id_procedimiento
+), medicamentos_a_facturar AS (
+    SELECT TOP (10) dt.id_tratamiento, dt.id_detalle_tratamiento
+    FROM clinica.detalles_tratamientos dt
+    JOIN clinica.tratamiento t ON t.id_tratamiento=dt.id_tratamiento
+    JOIN clinica.diagnosticos d ON d.id_diagnostico=t.id_diagnostico
+    JOIN facturacion.facturas f ON f.id_cita=d.id_cita
+    ORDER BY dt.id_tratamiento, dt.id_detalle_tratamiento
+), items AS (
+    SELECT f.id_factura, c.id_cita, CAST(NULL AS bigint) AS id_medicamento,
+        CAST(NULL AS bigint) AS id_tratamiento, CAST(NULL AS bigint) AS id_procedimiento,
+        CONCAT(N'Consulta: ',c.motivo_c) AS descripcion_df,
+        CAST(1 AS bigint) AS cantidad_df, c.costo_c AS precio_unit_df,
+        1 AS tipo, c.id_cita AS orden
+    FROM facturacion.facturas f JOIN clinica.citas c ON c.id_cita=f.id_cita
+    UNION ALL
+    SELECT f.id_factura, NULL, NULL, NULL, p.id_procedimiento,
+        CONCAT(N'Procedimiento: ',p.nombre_p), 1, p.costo_p, 2, p.id_procedimiento
+    FROM facturacion.facturas f
+    JOIN clinica.diagnosticos d ON d.id_cita=f.id_cita
+    JOIN clinica.procedimientos p ON p.id_diagnostico=d.id_diagnostico
+    JOIN procedimientos_a_facturar pf ON pf.id_procedimiento=p.id_procedimiento
+    UNION ALL
+    SELECT f.id_factura, NULL, m.id_medicamento, t.id_tratamiento, NULL,
+        CONCAT(N'Medicamento: ',m.nombre_m,N' - ',m.presentacion_m), 1, m.precio_m,
+        3, dt.id_detalle_tratamiento
+    FROM facturacion.facturas f
+    JOIN clinica.diagnosticos d ON d.id_cita=f.id_cita
+    JOIN clinica.tratamiento t ON t.id_diagnostico=d.id_diagnostico
+    JOIN clinica.detalles_tratamientos dt ON dt.id_tratamiento=t.id_tratamiento
+    JOIN farmacia.medicamentos m ON m.id_medicamento=dt.id_medicamento
+    JOIN medicamentos_a_facturar mf ON mf.id_tratamiento=dt.id_tratamiento
+        AND mf.id_detalle_tratamiento=dt.id_detalle_tratamiento
+)
+INSERT INTO facturacion.detalles_facturas
+    (id_detalle_factura,id_factura,id_cita,id_medicamento,id_tratamiento,
+     id_procedimiento,descripcion_df,cantidad_df,precio_unit_df)
+SELECT ROW_NUMBER() OVER(PARTITION BY id_factura ORDER BY tipo,orden,id_tratamiento,id_medicamento),
+    id_factura,id_cita,id_medicamento,id_tratamiento,id_procedimiento,
+    descripcion_df,cantidad_df,precio_unit_df
+FROM items;
 
--- ============================================================
--- REACTIVAR Y VALIDAR RESTRICCIONES DE LLAVES FORÁNEAS
--- ============================================================
-EXEC sp_MSforeachtable 'ALTER TABLE ? WITH CHECK CHECK CONSTRAINT ALL';
-GO
+-- El trigger ya calculó los totales; ahora es válido marcar algunas como pagadas.
+UPDATE facturacion.facturas SET estado_f=N'Pagada'
+WHERE id_cita % 2 = 0 AND total_f > 0;
 
-PRINT '¡Base de datos poblada exitosamente sin conflictos de FK!';
+-- Comprobaciones automáticas: ante cualquier discrepancia se revierte toda la carga.
+IF EXISTS (SELECT 1 FROM clinica.detalles_tratamientos WHERE id_detalle_tratamiento<=0)
+ OR EXISTS (SELECT 1 FROM facturacion.detalles_facturas WHERE id_detalle_factura<=0)
+    THROW 51002,N'Numeración de detalles inválida.',1;
+IF EXISTS (
+    SELECT 1 FROM facturacion.facturas f
+    OUTER APPLY (SELECT SUM(subtotal_df) total FROM facturacion.detalles_facturas d
+                 WHERE d.id_factura=f.id_factura) s
+    WHERE f.total_f<>COALESCE(s.total,0)
+) THROW 51003,N'Total de factura inconsistente.',1;
+IF EXISTS (
+    SELECT 1 FROM farmacia.medicamentos m JOIN #StockInicial s ON s.id_medicamento=m.id_medicamento
+    OUTER APPLY (SELECT SUM(cantidad_df) vendidas FROM facturacion.detalles_facturas d
+                 WHERE d.id_medicamento=m.id_medicamento) v
+    WHERE m.stock_m<>s.stock_m-COALESCE(v.vendidas,0)
+) THROW 51004,N'Descuento de inventario inconsistente.',1;
+IF EXISTS (
+    SELECT 1 FROM facturacion.detalles_facturas df
+    JOIN facturacion.facturas f ON f.id_factura=df.id_factura
+    LEFT JOIN clinica.procedimientos p ON p.id_procedimiento=df.id_procedimiento
+    LEFT JOIN clinica.tratamiento t ON t.id_tratamiento=df.id_tratamiento
+    LEFT JOIN clinica.diagnosticos dp ON dp.id_diagnostico=p.id_diagnostico
+    LEFT JOIN clinica.diagnosticos dt ON dt.id_diagnostico=t.id_diagnostico
+    WHERE (df.id_cita IS NOT NULL AND df.id_cita<>f.id_cita)
+       OR (df.id_procedimiento IS NOT NULL AND dp.id_cita<>f.id_cita)
+       OR (df.id_tratamiento IS NOT NULL AND dt.id_cita<>f.id_cita)
+       OR (df.id_medicamento IS NOT NULL AND NOT EXISTS (
+           SELECT 1 FROM clinica.detalles_tratamientos r
+           WHERE r.id_tratamiento=df.id_tratamiento AND r.id_medicamento=df.id_medicamento))
+) THROW 51005,N'Un detalle no corresponde al expediente facturado.',1;
+-- Validar exactamente las cantidades iniciales del documento.
+IF (SELECT COUNT_BIG(*) FROM pacientes.especies) <> 17
+ OR (SELECT COUNT_BIG(*) FROM pacientes.razas) <> 61
+ OR (SELECT COUNT_BIG(*) FROM pacientes.propietarios) <> 20
+ OR (SELECT COUNT_BIG(*) FROM pacientes.mascotas) <> 71
+ OR (SELECT COUNT_BIG(*) FROM personal.especialidades) <> 20
+ OR (SELECT COUNT_BIG(*) FROM personal.veterinario) <> 40
+ OR (SELECT COUNT_BIG(*) FROM farmacia.medicamentos) <> 30
+ OR (SELECT COUNT_BIG(*) FROM clinica.citas) <> 71
+ OR (SELECT COUNT_BIG(*) FROM clinica.diagnosticos) <> 40
+ OR (SELECT COUNT_BIG(*) FROM clinica.procedimientos) <> 40
+ OR (SELECT COUNT_BIG(*) FROM clinica.tratamiento) <> 40
+ OR (SELECT COUNT_BIG(*) FROM clinica.detalles_tratamientos) <> 40
+ OR (SELECT COUNT_BIG(*) FROM facturacion.facturas) <> 30
+ OR (SELECT COUNT_BIG(*) FROM facturacion.detalles_facturas) <> 50
+    THROW 51008, N'Los conteos no coinciden con la base inicial del documento.', 1;
+DROP TABLE #StockInicial;
+COMMIT TRANSACTION;
+PRINT N'Carga completada: relaciones, totales e inventario verificados.';
+END TRY
+BEGIN CATCH
+    IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+    SET IDENTITY_INSERT pacientes.mascotas OFF;
+    THROW;
+END CATCH;
+
+-- Conteos de salida.
+SELECT N'farmacia.medicamentos' AS tabla, COUNT_BIG(*) AS registros FROM farmacia.medicamentos
+UNION ALL
+SELECT N'pacientes.especies' AS tabla, COUNT_BIG(*) AS registros FROM pacientes.especies
+UNION ALL
+SELECT N'pacientes.razas' AS tabla, COUNT_BIG(*) AS registros FROM pacientes.razas
+UNION ALL
+SELECT N'personal.especialidades' AS tabla, COUNT_BIG(*) AS registros FROM personal.especialidades
+UNION ALL
+SELECT N'personal.veterinario' AS tabla, COUNT_BIG(*) AS registros FROM personal.veterinario
+UNION ALL
+SELECT N'pacientes.propietarios' AS tabla, COUNT_BIG(*) AS registros FROM pacientes.propietarios
+UNION ALL
+SELECT N'pacientes.mascotas' AS tabla, COUNT_BIG(*) AS registros FROM pacientes.mascotas
+UNION ALL
+SELECT N'clinica.citas' AS tabla, COUNT_BIG(*) AS registros FROM clinica.citas
+UNION ALL
+SELECT N'clinica.diagnosticos' AS tabla, COUNT_BIG(*) AS registros FROM clinica.diagnosticos
+UNION ALL
+SELECT N'clinica.procedimientos' AS tabla, COUNT_BIG(*) AS registros FROM clinica.procedimientos
+UNION ALL
+SELECT N'clinica.tratamiento' AS tabla, COUNT_BIG(*) AS registros FROM clinica.tratamiento
+UNION ALL
+SELECT N'clinica.detalles_tratamientos' AS tabla, COUNT_BIG(*) AS registros FROM clinica.detalles_tratamientos
+UNION ALL
+SELECT N'facturacion.facturas' AS tabla, COUNT_BIG(*) AS registros FROM facturacion.facturas
+UNION ALL
+SELECT N'facturacion.detalles_facturas' AS tabla, COUNT_BIG(*) AS registros FROM facturacion.detalles_facturas;
 GO
