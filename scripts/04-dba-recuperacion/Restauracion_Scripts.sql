@@ -2,7 +2,20 @@ USE [master];
 GO
 
 
--- SCRIPT DE RESTAURACIÓN
+--TAIL-LOG BACKUP (hacer SIEMPRE antes de restaurar)
+-- Base ONLINE y sana: la deja en estado RESTORING (nadie más escribe)
+BACKUP LOG [db_veterinaria]
+TO DISK = N'/backup/db_veterinaria/LOG/db_veterinaria_TAIL_20261112_120000.trn' --el nombre es editable
+GO
+
+-- Base DAÑADA (.mdf inaccesible): usa esta variante en lugar de la anterior
+-- BACKUP LOG [db_veterinaria]
+-- TO DISK = N'/backup/db_veterinaria/LOG/db_veterinaria_TAIL_20261112_120000.trn'
+-- WITH NO_TRUNCATE, CONTINUE_AFTER_ERROR, INIT, STATS = 10;
+-- GO
+
+
+-- SCRIPT DE RESTAURACIÓN CASO A.
 -- Base de datos: db_veterinaria
 
 -- 1. Restaurar el último respaldo COMPLETO (FULL)
@@ -23,6 +36,13 @@ FROM DISK = N'/backup/db_veterinaria/LOG/db_veterinaria_LOG_20261104_220530.trn'
 WITH NORECOVERY;
 GO
 
+-- NUEVO: 3.1 Restaurar el TAIL-LOG (último de la cadena, antes del RECOVERY)
+-- Opcional: agrega STOPAT = '2026-11-12 11:59:00' para detenerte en un momento específico
+RESTORE LOG [db_veterinaria]
+FROM DISK = N'/backup/db_veterinaria/LOG/db_veterinaria_TAIL_20261112_120000.trn'
+WITH NORECOVERY;
+GO
+
 -- 4. Poner la base de datos en línea (RECOVERY) para que sea operable
 RESTORE DATABASE [db_veterinaria] WITH RECOVERY;
 GO
@@ -31,15 +51,11 @@ GO
 -- SCRIPT DE RESTAURACIÓN - CASO B: 
 -- Implementar backups (FULL -> DIFF -> LOG) en una base de 
 -- datos vacía ya creada previamente llamada [db_copia].
--- ============================================================
+
 
 -- 1. Restaurar el respaldo COMPLETO (FULL) en [db_copia]
--- * EXPLICACIÓN MDFS Y LDFS: 
---   - MOVE N'db_veterinaria' redirige el archivo de datos original al nuevo archivo físico [db_copia.mdf].
---   - MOVE N'db_veterinaria_log' redirige el archivo de registro original al nuevo archivo físico [db_copia_log.ldf].
---   - REPLACE permite sobrescribir la base de datos [db_copia] que ya existe y está vacía.
-
 create database db_copia
+GO
 
 RESTORE DATABASE [db_copia]
 FROM DISK = N'/backup/db_veterinaria/FULL/db_veterinaria_FULL_20261111_002426.bak'
@@ -57,6 +73,12 @@ GO
 -- 3. Restaurar únicamente el respaldo de LOG más reciente en [db_copia]
 RESTORE LOG [db_copia]
 FROM DISK = N'/backup/db_veterinaria/LOG/db_veterinaria_LOG_20261111_004501.trn'
+WITH NORECOVERY;
+GO
+
+-- NUEVO: 3.1 Restaurar el TAIL-LOG en [db_copia] (antes del RECOVERY)
+RESTORE LOG [db_copia]
+FROM DISK = N'/backup/db_veterinaria/LOG/db_veterinaria_TAIL_20261112_120000.trn' --debe coincidir con el creado al inicio.
 WITH NORECOVERY;
 GO
 
@@ -102,7 +124,7 @@ ORDER BY type_desc, name;
 GO
 
 -- ============================================================
--- VERIFICACIONES POST-RESTAURACIÓN
+-- VERIFICACIONES POST-RESTAURACIÓN (BASE NORMAL)
 -- ============================================================
 
 USE [db_veterinaria];
