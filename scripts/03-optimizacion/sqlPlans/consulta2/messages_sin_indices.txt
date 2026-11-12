@@ -1,0 +1,28 @@
+Started executing query at Line 85
+SQL Server parse and compile time: 
+   CPU time = 0 ms, elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 5 ms.
+DBCC execution completed. If DBCC printed error messages, contact your system administrator.
+
+ SQL Server Execution Times:
+   CPU time = 3 ms,  elapsed time = 2 ms.
+DBCC execution completed. If DBCC printed error messages, contact your system administrator.
+
+ SQL Server Execution Times:
+   CPU time = 2 ms,  elapsed time = 3 ms.
+Started executing query at Line 89
+SQL Server parse and compile time: 
+   CPU time = 55 ms, elapsed time = 55 ms.
+(20 rows affected)
+Table 'mascotas'. Scan count 17, logical reads 607, physical reads 1, page server reads 0, read-ahead reads 216, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'citas'. Scan count 17, logical reads 4321, physical reads 1, page server reads 0, read-ahead reads 1701, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Warning: Null value is eliminated by an aggregate or other SET operation.
+(1 row affected)
+
+ SQL Server Execution Times:
+   CPU time = 861 ms,  elapsed time = 85 ms.
+Total execution time: 00:00:00.223
