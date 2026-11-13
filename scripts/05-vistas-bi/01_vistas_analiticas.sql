@@ -68,12 +68,14 @@ CREATE OR ALTER VIEW bi.v_desempenio_veterinarios AS
 SELECT
     v.nombre_v + ' ' + v.apellido_v AS NombreVeterinario,
     e.nombre_esp AS Especialidad,
-    COUNT(c.id_cita) AS CitasAtendidas,
-    ISNULL(SUM(c.costo_c), 0) AS TotalGenerado,
+    COUNT(DISTINCT c.id_cita) AS CitasAtendidas,
+    ISNULL(SUM(df.subtotal_df), 0) AS TotalGenerado,
     ISNULL(AVG(c.costo_c), 0) AS CostoPromedioCita
 FROM personal.veterinario v
          INNER JOIN personal.especialidades e ON v.id_especialidad = e.id_especialidad
-         LEFT JOIN clinica.citas c ON v.id_veterinario = c.id_veterinario AND c.estado_c = 'Completada'
+         LEFT JOIN clinica.citas c ON v.id_veterinario = c.id_veterinario
+         LEFT JOIN facturacion.facturas f ON c.id_cita = f.id_cita AND f.estado_f = 'Pagada'
+         LEFT JOIN facturacion.detalles_facturas df ON f.id_factura = df.id_factura
 GROUP BY v.nombre_v, v.apellido_v, e.nombre_esp;
 GO
 
