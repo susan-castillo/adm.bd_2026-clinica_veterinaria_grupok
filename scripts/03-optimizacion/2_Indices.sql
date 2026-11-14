@@ -47,10 +47,11 @@ GO
 -- ============================================================
 
 -- Candidato A (C1): llave por veterinario primero
--- CREATE NONCLUSTERED INDEX ix_cand_citas_vet_estado_fecha
--- ON clinica.citas (id_veterinario, estado_c, fecha_c) INCLUDE (costo_c);
--- DROP INDEX IF EXISTS ix_cand_citas_vet_estado_fecha ON clinica.citas;
+CREATE NONCLUSTERED INDEX ix_cand_citas_vet_estado_fecha
+ON clinica.citas (id_veterinario, estado_c, fecha_c) INCLUDE (costo_c);
+GO
 
+DROP INDEX IF EXISTS ix_cand_citas_vet_estado_fecha ON clinica.citas;
 -- Candidato B (C1): indice filtrado sobre Completada
 -- CREATE NONCLUSTERED INDEX ix_cand_citas_comp_fecha
 -- ON clinica.citas (fecha_c) INCLUDE (id_veterinario, costo_c)
