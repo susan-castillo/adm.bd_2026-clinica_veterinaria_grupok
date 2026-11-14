@@ -1,29 +1,45 @@
 /*
-SECCION 3: Consultas analiticas, indices y planes de ejecucion
-Base: db_veterinaria (restaurada desde DataBase_UpdatedData.bak). Activar "Actual Plan" en VS Code.
+SECCION 3 - Consultas analiticas (C1, C2, C3)
+Base: db_veterinaria (restaurada desde DataBase_UpdatedData.bak).
 
-Flujo por consulta (C1, C2, C3):
-  1. Estado "sin indice": ejecutar el bloque y guardar Messages + plan real.
-  2. Crear los indices y repetir EXACTAMENTE el mismo bloque.
-Los DBCC son solo para pruebas locales: no ejecutarlos en una instancia compartida.
+ESTE ARCHIVO NO CREA NI BORRA INDICES. Se ejecuta dos veces, identico:
+  1. Sin indice  -> estado inicial (Messages dice "ESTADO: SIN INDICE").
+  2. Corre Indices.sql, y vuelve a ejecutar este archivo (dice "ESTADO: CON INDICE").
 */
 
+-- ============================================================
+-- 0. PREPARACION
+-- ============================================================
+USE db_veterinaria;
+GO
 SET STATISTICS IO ON;
 SET STATISTICS TIME ON;
 GO
 
--- ESTADO "SIN INDICE"
-DROP INDEX IF EXISTS ix_citas_estado_fecha         ON clinica.citas;
-DROP INDEX IF EXISTS ix_citas_estado_mascota_fecha ON clinica.citas;
-DROP INDEX IF EXISTS ix_facturas_estado_fecha      ON facturacion.facturas;
+-- 0.1 Estado actual (debe coincidir con lo que quieres medir)
+IF EXISTS (SELECT 1 FROM sys.indexes
+           WHERE name LIKE 'ix[_]%' AND OBJECTPROPERTY(object_id, 'IsUserTable') = 1)
+    PRINT N'>>> ESTADO: CON INDICE';
+ELSE
+    PRINT N'>>> ESTADO: SIN INDICE';
+GO
+SELECT OBJECT_SCHEMA_NAME(object_id) AS esquema, OBJECT_NAME(object_id) AS tabla, name AS indice
+FROM sys.indexes
+WHERE name LIKE 'ix[_]%' AND OBJECTPROPERTY(object_id, 'IsUserTable') = 1
+ORDER BY esquema, tabla, indice;
+GO
+
+-- 0.2 Estadisticas parejas (evita que el "con indice" gane por estadisticas frescas)
+UPDATE STATISTICS clinica.citas        WITH FULLSCAN;
+UPDATE STATISTICS facturacion.facturas WITH FULLSCAN;
+UPDATE STATISTICS pacientes.mascotas   WITH FULLSCAN;
+UPDATE STATISTICS personal.veterinario WITH FULLSCAN;
 GO
 
 -- ============================================================
--- CONSULTAS (cada bloque limpia cache antes de medir)
--- ============================================================
-
 -- C1: Productividad y ranking de veterinarios por especialidad (ultimo año)
 -- Ventanas: RANK(), SUM(COUNT(*)) OVER (PARTITION BY especialidad)
+-- ============================================================
 CHECKPOINT;
 DBCC DROPCLEANBUFFERS;
 DBCC FREEPROCCACHE;
@@ -50,8 +66,10 @@ GROUP BY esp.id_especialidad, esp.nombre_esp,
 ORDER BY esp.nombre_esp, ranking_en_especialidad;
 GO
 
+-- ============================================================
 -- C2: Frecuencia de visitas y dias entre visitas por mascota (TOP 20)
 -- Ventana: LAG() sobre la visita anterior de cada mascota
+-- ============================================================
 CHECKPOINT;
 DBCC DROPCLEANBUFFERS;
 DBCC FREEPROCCACHE;
@@ -89,8 +107,10 @@ JOIN pacientes.mascotas m ON m.id_mascota = r.id_mascota
 ORDER BY r.total_visitas DESC, m.id_mascota;
 GO
 
+-- ============================================================
 -- C3: Facturacion mensual acumulada y promedio movil (solo facturas Pagada)
 -- Ventanas: SUM() OVER acumulado, AVG() OVER movil, LAG()
+-- ============================================================
 CHECKPOINT;
 DBCC DROPCLEANBUFFERS;
 DBCC FREEPROCCACHE;
@@ -121,71 +141,4 @@ SELECT
          AS DECIMAL(7,2))                                        AS variacion_pct_mes_anterior
 FROM mensual
 ORDER BY mes;
-GO
-
--- ============================================================
--- INDICES PROPIOS (crear una sola vez)
--- ============================================================
-
--- C1: estado_c (igualdad) + fecha_c (rango). INCLUDE cubre la consulta
---     y evita volver a la tabla (reemplaza el Clustered Index Scan).
-CREATE NONCLUSTERED INDEX ix_citas_estado_fecha
-ON clinica.citas (estado_c, fecha_c)
-INCLUDE (id_veterinario, costo_c);
-GO
-
--- C2: citas completadas ya ordenadas por mascota y fecha;
---     LAG() no necesita el Sort que aparece sin indice.
-CREATE NONCLUSTERED INDEX ix_citas_estado_mascota_fecha
-ON clinica.citas (estado_c, id_mascota, fecha_c);
-GO
-
--- C3: estado_f (igualdad) + fecha_emision_f (orden por mes);
---     INCLUDE total_f hace que el indice cubra la consulta.
-CREATE NONCLUSTERED INDEX ix_facturas_estado_fecha
-ON facturacion.facturas (estado_f, fecha_emision_f)
-INCLUDE (total_f);
-GO
-
--- ============================================================
--- CANDIDATOS ADICIONALES
--- Se agregan aqui uno a uno. Solo se conservan (y documentan)
--- los que bajan de forma clara lecturas logicas o CPU.
--- ============================================================
-
-
--- ============================================================
--- VERIFICACION
--- ============================================================
-
--- Indices creados (columnas clave, incluidas y filtro)
-SELECT
-    OBJECT_SCHEMA_NAME(i.object_id) AS esquema,
-    OBJECT_NAME(i.object_id)        AS tabla,
-    i.name                          AS indice,
-    i.type_desc                     AS tipo,
-    STRING_AGG(CASE WHEN ic.is_included_column = 0 THEN c.name END, ', ')
-        WITHIN GROUP (ORDER BY ic.key_ordinal) AS columnas_clave,
-    STRING_AGG(CASE WHEN ic.is_included_column = 1 THEN c.name END, ', ') AS columnas_incluidas,
-    i.filter_definition             AS filtro
-FROM sys.indexes i
-JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
-JOIN sys.columns c        ON c.object_id = ic.object_id AND c.column_id = ic.column_id
-WHERE i.name LIKE 'ix[_]%'
-GROUP BY i.object_id, i.name, i.type_desc, i.filter_definition
-ORDER BY esquema, tabla, indice;
-GO
-
--- Espacio por indice (MB)
-SELECT
-    OBJECT_SCHEMA_NAME(i.object_id) AS esquema,
-    OBJECT_NAME(i.object_id)        AS tabla,
-    i.name                          AS indice,
-    CAST(SUM(ps.used_page_count) * 8 / 1024.0 AS DECIMAL(10,2)) AS tamanio_mb
-FROM sys.indexes i
-JOIN sys.dm_db_partition_stats ps
-  ON ps.object_id = i.object_id AND ps.index_id = i.index_id
-WHERE i.name LIKE 'ix[_]%'
-GROUP BY i.object_id, i.name
-ORDER BY tamanio_mb DESC;
 GO
