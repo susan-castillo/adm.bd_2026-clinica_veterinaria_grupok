@@ -139,19 +139,20 @@ Table 'citas'. Scan count 1, logical reads 328, physical reads 0, page server re
 8:26:55 a. m.
 Total execution time: 00:00:00.086
 
-8:27:12 a. m.
-Started executing query at  Line 78
+8:56:07 a. m.
+Started executing query at  Line 77
 SQL Server parse and compile time: 
-   CPU time = 0 ms, elapsed time = 0 ms.
+   CPU time = 4 ms, elapsed time = 4 ms.
 Warning: Null value is eliminated by an aggregate or other SET operation.
 (20 rows affected)
-Table 'mascotas'. Scan count 0, logical reads 43, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'mascotas'. Scan count 0, logical reads 48, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
 Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
 Table 'citas'. Scan count 1, logical reads 328, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+(1 row affected)
  SQL Server Execution Times:
-   CPU time = 91 ms,  elapsed time = 91 ms.
-8:27:13 a. m.
-Total execution time: 00:00:00.092
+   CPU time = 92 ms,  elapsed time = 91 ms.
+8:56:07 a. m.
+Total execution time: 00:00:00.105
 
 --C3
 8:28:26 a. m.
