@@ -1,0 +1,31 @@
+-- ============================================================
+-- Usando Checkpoint y DBCC
+-- ============================================================
+
+12:29:14 a. m.
+Started executing query at  Line 114
+SQL Server parse and compile time: 
+   CPU time = 0 ms, elapsed time = 0 ms.
+ SQL Server Execution Times:
+   CPU time = 6 ms,  elapsed time = 12 ms.
+DBCC execution completed. If DBCC printed error messages, contact your system administrator.
+ SQL Server Execution Times:
+   CPU time = 3 ms,  elapsed time = 3 ms.
+DBCC execution completed. If DBCC printed error messages, contact your system administrator.
+ SQL Server Execution Times:
+   CPU time = 3 ms,  elapsed time = 2 ms.
+12:29:14 a. m.
+Started executing query at  Line 118
+SQL Server parse and compile time: 
+   CPU time = 5 ms, elapsed time = 6 ms.
+(37 rows affected)
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Workfile'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'facturas'. Scan count 1, logical reads 324, physical reads 1, page server reads 0, read-ahead reads 320, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+(1 row affected)
+ SQL Server Execution Times:
+   CPU time = 19 ms,  elapsed time = 18 ms.
+12:29:14 a. m.
+Total execution time: 00:00:00.061
+
+Enlace Plan: https://www.brentozar.com/pastetheplan/?id=rmTS5z6CHu
