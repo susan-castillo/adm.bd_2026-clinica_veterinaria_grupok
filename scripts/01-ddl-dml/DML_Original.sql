@@ -1,10 +1,6 @@
--- DML de prueba compatible con el DDL y los triggers separados.
--- Cantidades iniciales del dimensionamiento del documento:
--- especies 17; razas 61; propietarios 20; mascotas 71;
--- especialidades 20; veterinario 40; medicamentos 30; citas 71;
--- diagnosticos 40; procedimientos 40; tratamiento 40;
--- detalles_tratamientos 40; facturas 30; detalles_facturas 50.
--- Ejecutar antes 02_Triggers_Veterinaria.sql. Este archivo no crea ni modifica triggers.
+
+-- Ejecutar antes 02_Triggers_Veterinaria.sql. Este archivo no crea triggers.
+
 USE db_veterinaria;
 GO
 SET NOCOUNT ON;

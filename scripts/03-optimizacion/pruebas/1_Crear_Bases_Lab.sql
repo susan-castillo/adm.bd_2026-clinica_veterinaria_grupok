@@ -3,9 +3,6 @@ LABORATORIO (Seccion 3): crea las dos bases de demostracion.
   db_vet_lab_sin_indices : solo el .bak (linea base)
   db_vet_lab_con_indices : .bak + los 3 indices filtrados del diseño final
 Este script NO toca db_veterinaria (nunca la nombra).
-Requisitos: .bak ya copiado al contenedor (README_Restore.md, paso 1)
-            y conexion a master con el usuario sa.
-Se puede re-ejecutar: reemplaza las dos bases de laboratorio.
 */
 USE master;
 GO

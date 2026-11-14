@@ -7,8 +7,7 @@ IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'bi')
     END
 GO
 
--- ============================================================
--- VISTA 1: Tarjetas de KPIs Ejecutivos (Hecho Global)
+-- VISTA 1: tarjetas de KPIs ejecutivos (Global)
 -- ============================================================
 -- MEDIDAS: Ingresos Totales, Citas Completadas, Mascotas Registradas, Ticket Promedio.
 CREATE OR ALTER VIEW bi.v_kpis_empresariales AS
@@ -19,8 +18,7 @@ SELECT
     (SELECT ISNULL(AVG(costo_c), 0) FROM clinica.citas WHERE estado_c = 'Completada') AS Ticket_Promedio_Cita;
 GO
 
--- ============================================================
--- VISTA 2: Facturación Mensual por Especialidad (Tendencia Temporal)
+-- VISTA 2: Facturación mensual por especialidad
 -- ============================================================
 -- MEDIDAS: TotalFacturado, TotalCitasAtendidas.
 -- DIMENSIONES: Especialidad, Año, MesNum, MesNombre.
@@ -41,8 +39,7 @@ WHERE f.estado_f = 'Pagada'
 GROUP BY e.nombre_esp, YEAR(f.fecha_emision_f), MONTH(f.fecha_emision_f), DATENAME(MONTH, f.fecha_emision_f);
 GO
 
--- ============================================================
--- VISTA 3: Demografía de Pacientes (Dinámica por Tiempo y Especialidad)
+-- VISTA 3: Demografía de pacientes
 -- ============================================================
 -- MEDIDAS: CantidadMascotas, PesoPromedio.
 -- DIMENSIONES: Anio, MesNum, MesNombre, Especialidad, Especie, Raza, Sexo.
@@ -75,8 +72,7 @@ GROUP BY
     m.sexo_m;
 GO
 
--- ============================================================
--- VISTA 4: Desempeño y Productividad por Veterinario (Dinámica por Tiempo)
+-- VISTA 4: desempeño y productividad por veterinario (dinámica por tiempo)
 -- ============================================================
 -- MEDIDAS: CitasAtendidas, TotalGenerado, CostoPromedioCita.
 -- DIMENSIONES: Anio, MesNum, MesNombre, NombreVeterinario, Especialidad.
@@ -105,8 +101,7 @@ GROUP BY
     e.nombre_esp;
 GO
 
--- ============================================================
--- VISTA 5: Consumo y Rotación de Medicamentos en Farmacia
+-- VISTA 5: Consumo y rotación de medicamentos en farmacia
 -- ============================================================
 -- MEDIDAS: UnidadesVendidas, IngresosMedicamento, StockActual.
 -- DIMENSIONES: Medicamento, Presentacion, Laboratorio.
@@ -123,8 +118,7 @@ FROM farmacia.medicamentos m
 GROUP BY m.nombre_m, m.presentacion_m, m.laboratorio_m, m.stock_m;
 GO
 
--- ============================================================
--- VISTA 6: Estado Operativo de Citas
+-- VISTA 6: Estado de citas
 -- ============================================================
 -- MEDIDAS: TotalCitas, PorcentajeDelTotal.
 -- DIMENSIONES: EstadoCita (Programada, En curso, Completada, Cancelada).

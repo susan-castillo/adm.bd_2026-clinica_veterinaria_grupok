@@ -1,5 +1,4 @@
-﻿-- 02. TRIGGERS: ejecutar después del DDL y antes del DML.
--- Crea o actualiza los ocho triggers; no carga ni elimina registros.
+﻿-- TRIGGERS: ejecutar después del DDL y antes del DML.
 USE db_veterinaria;
 GO
 CREATE OR ALTER TRIGGER clinica.tr_antes_insertar_detalle_tratamiento

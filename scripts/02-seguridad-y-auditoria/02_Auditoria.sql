@@ -8,7 +8,7 @@ SELECT name
 FROM sys.server_audits
 WHERE name = 'Audit_Veterinaria_Facturacion';
 
-/* 2. Preparar la carpeta EN WINDOWS, en el equipo donde corre SQL Server:
+/* 2. Crear la carpeta en windows, donde corre SQL Server:
 docker exec sqlserver-2025 mkdir -p /audit/Veterinaria
 Y PARA VERIFICARLA 
 docker exec sqlserver-2025 ls -ld /audit/Veterinaria
