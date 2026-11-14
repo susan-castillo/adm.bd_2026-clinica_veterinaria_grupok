@@ -51,10 +51,9 @@ SELECT
  (SELECT SUM(total_f) FROM facturacion.facturas)   AS suma_total_facturas;
 ```
 Resultado esperado:
-
 | propietarios | mascotas | citas  | facturas | suma_costo_citas | suma_total_facturas |
 |--------------|----------|--------|----------|------------------|---------------------|
-| 5020         | 20075    | 300050 | 178471   | 47284833.60      | 28110760.47         |
+| 5882         | 10000    | 100000 | 76283    | 2452858.00       | 4430201.90          |
 
 ## Si algo falla
 - **Operating system error 5 (Access is denied):** falta el `chown` del paso 1.
