@@ -1,16 +1,11 @@
 /*
 SECCION 3 - Consultas analiticas (C1, C2, C3)
 Base: db_veterinaria (restaurada desde DataBase_UpdatedData.bak).
-
-ESTE ARCHIVO NO CREA NI BORRA INDICES. Se ejecuta dos veces, identico:
-  1. Sin indice  -> estado inicial (Messages dice "ESTADO: SIN INDICE").
-  2. Corre Indices.sql, y vuelve a ejecutar este archivo (dice "ESTADO: CON INDICE").
 */
 
 -- ============================================================
 -- 0. PREPARACION
 -- ============================================================
--- USE omitido: se ejecuta en la base a la que estes conectada (db_vet_lab_sin_indices o db_vet_lab_con_indices)
 GO
 SET STATISTICS IO ON;
 SET STATISTICS TIME ON;
