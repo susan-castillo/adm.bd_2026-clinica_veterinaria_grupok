@@ -63,8 +63,8 @@ ALTER ROLE rol_desarrollador ADD MEMBER usuario_desarrollador;
 CREATE USER usuario_arquitecto WITHOUT LOGIN;
 ALTER ROLE rol_arquitecto_datos ADD MEMBER usuario_arquitecto;
 
-CREATE USER usuario_desarrollador_bi WITHOUT LOGIN;
-ALTER ROLE rol_desarrollador_bi ADD MEMBER usuario_desarrollador_bi;
+CREATE USER usuario_powerbi WITHOUT LOGIN;
+ALTER ROLE rol_desarrollador_bi ADD MEMBER usuario_powerbi;
 GO
 
 
@@ -337,7 +337,7 @@ REVERT;
 GO
 
 -- desarrollador BI: permitido.
-EXECUTE AS USER = 'usuario_desarrollador_bi';
+EXECUTE AS USER = 'usuario_powerbi';
 GO
 SELECT HAS_PERMS_BY_NAME('bi', 'SCHEMA', 'ALTER') AS puede_modificar_vistas_bi;
 GO
@@ -345,7 +345,7 @@ REVERT;
 GO
 
 -- desarrollador BI: denegado.
-EXECUTE AS USER = 'usuario_desarrollador_bi';
+EXECUTE AS USER = 'usuario_powerbi';
 GO
 UPDATE farmacia.medicamentos SET stock_m = stock_m WHERE 1=0;
 GO

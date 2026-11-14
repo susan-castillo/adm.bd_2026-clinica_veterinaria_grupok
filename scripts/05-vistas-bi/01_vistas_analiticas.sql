@@ -42,41 +42,67 @@ GROUP BY e.nombre_esp, YEAR(f.fecha_emision_f), MONTH(f.fecha_emision_f), DATENA
 GO
 
 -- ============================================================
--- VISTA 3: Demografía de Pacientes (Dimensión Mascota/Especie)
+-- VISTA 3: Demografía de Pacientes (Dinámica por Tiempo y Especialidad)
 -- ============================================================
 -- MEDIDAS: CantidadMascotas, PesoPromedio.
--- DIMENSIONES: Especie, Raza, Sexo.
+-- DIMENSIONES: Anio, MesNum, MesNombre, Especialidad, Especie, Raza, Sexo.
 CREATE OR ALTER VIEW bi.v_demografia_mascotas AS
 SELECT
-    esp.nombre_e AS Especie,
-    r.nombre_r AS Raza,
-    m.sexo_m AS Sexo,
-    COUNT(m.id_mascota) AS CantidadMascotas,
-    AVG(m.peso_m) AS PesoPromedio
+    YEAR(f.fecha_emision_f)            AS Anio,
+    MONTH(f.fecha_emision_f)           AS MesNum,
+    DATENAME(MONTH, f.fecha_emision_f) AS MesNombre,
+    e.nombre_esp                       AS Especialidad,
+    esp.nombre_e                       AS Especie,
+    r.nombre_r                         AS Raza,
+    m.sexo_m                           AS Sexo,
+    COUNT(DISTINCT m.id_mascota)       AS CantidadMascotas,
+    AVG(m.peso_m)                      AS PesoPromedio
 FROM pacientes.mascotas m
-         INNER JOIN pacientes.razas r ON m.id_raza = r.id_raza
-         INNER JOIN pacientes.especies esp ON r.id_especie = esp.id_especie
-GROUP BY esp.nombre_e, r.nombre_r, m.sexo_m;
+         INNER JOIN pacientes.razas r          ON m.id_raza = r.id_raza
+         INNER JOIN pacientes.especies esp     ON r.id_especie = esp.id_especie
+         INNER JOIN clinica.citas c            ON m.id_mascota = c.id_mascota
+         INNER JOIN personal.veterinario v     ON c.id_veterinario = v.id_veterinario
+         INNER JOIN personal.especialidades e  ON v.id_especialidad = e.id_especialidad
+         INNER JOIN facturacion.facturas f     ON c.id_cita = f.id_cita AND f.estado_f = 'Pagada'
+WHERE f.fecha_emision_f IS NOT NULL
+GROUP BY
+    YEAR(f.fecha_emision_f),
+    MONTH(f.fecha_emision_f),
+    DATENAME(MONTH, f.fecha_emision_f),
+    e.nombre_esp,
+    esp.nombre_e,
+    r.nombre_r,
+    m.sexo_m;
 GO
 
 -- ============================================================
--- VISTA 4: Desempeño y Productividad por Veterinario
+-- VISTA 4: Desempeño y Productividad por Veterinario (Dinámica por Tiempo)
 -- ============================================================
 -- MEDIDAS: CitasAtendidas, TotalGenerado, CostoPromedioCita.
--- DIMENSIONES: NombreVeterinario, Especialidad.
+-- DIMENSIONES: Anio, MesNum, MesNombre, NombreVeterinario, Especialidad.
 CREATE OR ALTER VIEW bi.v_desempenio_veterinarios AS
 SELECT
-    v.nombre_v + ' ' + v.apellido_v AS NombreVeterinario,
-    e.nombre_esp AS Especialidad,
-    COUNT(DISTINCT c.id_cita) AS CitasAtendidas,
-    ISNULL(SUM(df.subtotal_df), 0) AS TotalGenerado,
-    ISNULL(AVG(c.costo_c), 0) AS CostoPromedioCita
+    YEAR(f.fecha_emision_f)            AS Anio,
+    MONTH(f.fecha_emision_f)           AS MesNum,
+    DATENAME(MONTH, f.fecha_emision_f) AS MesNombre,
+    v.nombre_v + ' ' + v.apellido_v    AS NombreVeterinario,
+    e.nombre_esp                       AS Especialidad,
+    COUNT(DISTINCT c.id_cita)          AS CitasAtendidas,
+    ISNULL(SUM(df.subtotal_df), 0)     AS TotalGenerado,
+    ISNULL(AVG(c.costo_c), 0)          AS CostoPromedioCita
 FROM personal.veterinario v
-         INNER JOIN personal.especialidades e ON v.id_especialidad = e.id_especialidad
-         LEFT JOIN clinica.citas c ON v.id_veterinario = c.id_veterinario
-         LEFT JOIN facturacion.facturas f ON c.id_cita = f.id_cita AND f.estado_f = 'Pagada'
-         LEFT JOIN facturacion.detalles_facturas df ON f.id_factura = df.id_factura
-GROUP BY v.nombre_v, v.apellido_v, e.nombre_esp;
+         INNER JOIN personal.especialidades e       ON v.id_especialidad = e.id_especialidad
+         INNER JOIN clinica.citas c                 ON v.id_veterinario = c.id_veterinario
+         INNER JOIN facturacion.facturas f          ON c.id_cita = f.id_cita AND f.estado_f = 'Pagada'
+         INNER JOIN facturacion.detalles_facturas df ON f.id_factura = df.id_factura
+WHERE f.fecha_emision_f IS NOT NULL
+GROUP BY
+    YEAR(f.fecha_emision_f),
+    MONTH(f.fecha_emision_f),
+    DATENAME(MONTH, f.fecha_emision_f),
+    v.nombre_v,
+    v.apellido_v,
+    e.nombre_esp;
 GO
 
 -- ============================================================
