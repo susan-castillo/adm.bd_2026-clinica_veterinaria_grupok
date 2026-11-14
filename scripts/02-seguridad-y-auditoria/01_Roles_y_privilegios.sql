@@ -1,6 +1,4 @@
 ﻿-- ROLES Y PRIVILEGIOS - VETERINARIA
-USE db_veterinaria;
-GO
 
 -- 0. ROL PERSONALIZADO DE SERVIDOR: CREACION DE BASES
 USE master;
@@ -11,6 +9,8 @@ GRANT CREATE ANY DATABASE TO rol_creador_bases;
 GO
 
 -- 1. Crear los esquemas (estan en el ddl).
+USE db_veterinaria;
+GO
 
 -- 2. Crear los cinco roles.
 CREATE ROLE rol_recepcion;
@@ -130,11 +130,10 @@ GO
 
 -- 7.1 Permisos de desarrollador: objetos de programacion y datos de prueba.
 GRANT CREATE PROCEDURE, CREATE FUNCTION, CREATE VIEW TO rol_desarrollador;
-GRANT ALTER ON SCHEMA::desarrollo TO rol_desarrollador;
-GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA::pruebas TO rol_desarrollador;
--- No se concede ALTER sobre los esquemas operativos ni CREATE TABLE.
--- Crear/modificar triggers operativos requiere privilegios adicionales y
--- debe hacerse mediante despliegues aprobados del arquitecto.
+GRANT SELECT ON clinica.diagnosticos TO rol_desarrollador;
+GRANT SELECT ON clinica.tratamiento TO rol_desarrollador;
+GRANT INSERT, UPDATE ON clinica.diagnosticos TO rol_desarrollador;
+GRANT INSERT, UPDATE ON clinica.tratamiento TO rol_desarrollador;
 GO
 
 -- 7.2 Permisos de arquitecto: DDL sobre esquemas autorizados.
@@ -178,13 +177,11 @@ GO
 -- No se asignan privilegios peligrosos de db_owner o sysadmin.
 -- El usuario solicita la restauracion y un administrador autorizado la
 -- ejecuta con un procedimiento operativo supervisado.
-GO
 
 -- 7.7 Auditor: lectura de auditorias mediante permisos especificos de servidor.
 -- La consulta de archivos de auditoria se configura por separado, a nivel
 -- de servidor, segun la version SQL Server y las politicas de acceso.
 -- No se otorgan permisos de modificar ni desactivar auditorias.
-GO
 
 -- 7.8 Profesor: SELECT sobre esquemas operativos y BI.
 GRANT SELECT ON SCHEMA::pacientes TO rol_profesor_lectura;
@@ -225,6 +222,79 @@ GO
 -- WHERE 1=0 comprueba permisos sin modificar filas.
 -- Estas pruebas presuponen una base de laboratorio sin triggers con efectos externos.
 
+-- recepcion: acceso permitido.
+EXECUTE AS USER = 'usuario_recepcion';
+GO
+SELECT USER_NAME() AS usuario_actual;
+SELECT TOP (5) * FROM pacientes.propietarios;
+GO
+REVERT;
+GO
+
+-- recepcion: acceso denegado.
+EXECUTE AS USER = 'usuario_recepcion';
+GO
+SELECT USER_NAME() AS usuario_actual;
+SELECT TOP (5) * FROM clinica.diagnosticos;
+GO
+REVERT;
+GO
+
+-- veterinario: acceso permitido.
+EXECUTE AS USER = 'usuario_veterinario';
+GO
+SELECT USER_NAME() AS usuario_actual;
+UPDATE clinica.citas SET estado_c=estado_c WHERE 1=0;
+GO
+REVERT;
+GO
+
+-- veterinario: acceso denegado.
+EXECUTE AS USER = 'usuario_veterinario';
+GO
+SELECT USER_NAME() AS usuario_actual;
+UPDATE clinica.citas SET costo_c=costo_c WHERE 1=0;
+GO
+REVERT;
+GO
+
+-- facturacion: acceso permitido.
+EXECUTE AS USER = 'usuario_facturacion';
+GO
+SELECT USER_NAME() AS usuario_actual;
+SELECT TOP (5) id_propietario,dui_p,nombre_p,apellido_p,correo_p FROM pacientes.propietarios;
+GO
+REVERT;
+GO
+
+-- facturacion: acceso denegado.
+EXECUTE AS USER = 'usuario_facturacion';
+GO
+SELECT USER_NAME() AS usuario_actual;
+DELETE FROM facturacion.facturas WHERE 1=0;
+GO
+REVERT;
+GO
+
+-- inventario: acceso permitido.
+EXECUTE AS USER = 'usuario_inventario';
+GO
+SELECT USER_NAME() AS usuario_actual;
+SELECT TOP (5) * FROM farmacia.medicamentos;
+GO
+REVERT;
+GO
+
+-- inventario: acceso denegado.
+EXECUTE AS USER = 'usuario_inventario';
+GO
+SELECT USER_NAME() AS usuario_actual;
+SELECT TOP (5) * FROM pacientes.propietarios;
+GO
+REVERT;
+GO
+
+-- reportes BI: acceso denegado.
 EXECUTE AS USER = 'usuario_reportes';
 GO
 SELECT TOP (5) * FROM pacientes.propietarios;
@@ -232,11 +302,12 @@ GO
 REVERT;
 GO
 
--- desarrollador: permitido (lectura de esquema de pruebas; puede estar vacio).
+-- desarrollador: permitido.
 EXECUTE AS USER = 'usuario_desarrollador';
 GO
 SELECT USER_NAME() AS usuario_actual;
-SELECT HAS_PERMS_BY_NAME('pruebas', 'SCHEMA', 'INSERT') AS puede_insertar_pruebas;
+SELECT TOP (5) * FROM clinica.diagnosticos;
+SELECT HAS_PERMS_BY_NAME('clinica.diagnosticos', 'OBJECT', 'UPDATE') AS puede_actualizar;
 GO
 REVERT;
 GO
@@ -244,7 +315,7 @@ GO
 -- desarrollador: denegado.
 EXECUTE AS USER = 'usuario_desarrollador';
 GO
-SELECT TOP (5) * FROM clinica.diagnosticos;
+DELETE FROM clinica.diagnosticos WHERE 1=0;
 GO
 REVERT;
 GO
