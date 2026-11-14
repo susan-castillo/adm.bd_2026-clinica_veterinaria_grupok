@@ -51,24 +51,32 @@ CREATE NONCLUSTERED INDEX ix_cand_citas_vet_estado_fecha
 ON clinica.citas (id_veterinario, estado_c, fecha_c) INCLUDE (costo_c);
 GO
 
+--NO PRESENTÓ MEJORA, ASI QUE ELIMINAMOS Y PROBAMOS EL OTRO
 DROP INDEX IF EXISTS ix_cand_citas_vet_estado_fecha ON clinica.citas;
+
 -- Candidato B (C1): indice filtrado sobre Completada
--- CREATE NONCLUSTERED INDEX ix_cand_citas_comp_fecha
--- ON clinica.citas (fecha_c) INCLUDE (id_veterinario, costo_c)
--- WHERE estado_c = N'Completada';
--- DROP INDEX IF EXISTS ix_cand_citas_comp_fecha ON clinica.citas;
+CREATE NONCLUSTERED INDEX ix_cand_citas_comp_fecha
+ON clinica.citas (fecha_c) INCLUDE (id_veterinario, costo_c)
+WHERE estado_c = N'Completada';
+
+--NO PRESENTÓ MEJORA, ASI QUE ELIMINAMOS Y PROBAMOS EL OTRO
+DROP INDEX IF EXISTS ix_cand_citas_comp_fecha ON clinica.citas;
 
 -- Candidato C (C2): indice filtrado sobre Completada
--- CREATE NONCLUSTERED INDEX ix_cand_citas_comp_mascota_fecha
--- ON clinica.citas (id_mascota, fecha_c)
--- WHERE estado_c = N'Completada';
--- DROP INDEX IF EXISTS ix_cand_citas_comp_mascota_fecha ON clinica.citas;
+CREATE NONCLUSTERED INDEX ix_cand_citas_comp_mascota_fecha
+ON clinica.citas (id_mascota, fecha_c)
+WHERE estado_c = N'Completada';
+
+--NO PRESENTÓ MEJORA, ASI QUE ELIMINAMOS Y PROBAMOS EL OTRO
+DROP INDEX IF EXISTS ix_cand_citas_comp_mascota_fecha ON clinica.citas;
 
 -- Candidato D (C3): indice filtrado sobre Pagada
--- CREATE NONCLUSTERED INDEX ix_cand_facturas_pagada_fecha
--- ON facturacion.facturas (fecha_emision_f) INCLUDE (total_f)
--- WHERE estado_f = N'Pagada';
--- DROP INDEX IF EXISTS ix_cand_facturas_pagada_fecha ON facturacion.facturas;
+CREATE NONCLUSTERED INDEX ix_cand_facturas_pagada_fecha
+ON facturacion.facturas (fecha_emision_f) INCLUDE (total_f)
+WHERE estado_f = N'Pagada';
+
+--NO PRESENTÓ MEJORA, ASI QUE ELIMINAMOS Y ...ya no hay candidatos :D
+DROP INDEX IF EXISTS ix_cand_facturas_pagada_fecha ON facturacion.facturas;
 
 -- ============================================================
 -- 3. VERIFICACION
