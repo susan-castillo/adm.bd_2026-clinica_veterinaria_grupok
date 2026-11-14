@@ -1,0 +1,33 @@
+-- ============================================================
+-- Usando Checkpoint y DBCC
+-- ============================================================
+
+12:17:23 a. m.
+Started executing query at  Line 43
+SQL Server parse and compile time: 
+   CPU time = 0 ms, elapsed time = 0 ms.
+ SQL Server Execution Times:
+   CPU time = 3 ms,  elapsed time = 9 ms.
+DBCC execution completed. If DBCC printed error messages, contact your system administrator.
+ SQL Server Execution Times:
+   CPU time = 9 ms,  elapsed time = 8 ms.
+DBCC execution completed. If DBCC printed error messages, contact your system administrator.
+ SQL Server Execution Times:
+   CPU time = 6 ms,  elapsed time = 9 ms.
+12:17:23 a. m.
+Started executing query at  Line 47
+SQL Server parse and compile time: 
+   CPU time = 10 ms, elapsed time = 10 ms.
+(40 rows affected)
+Table 'Worktable'. Scan count 3, logical reads 161, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Workfile'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'citas'. Scan count 1, logical reads 279, physical reads 1, page server reads 0, read-ahead reads 275, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'especialidades'. Scan count 0, logical reads 80, physical reads 1, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'veterinario'. Scan count 1, logical reads 3, physical reads 1, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+(1 row affected)
+ SQL Server Execution Times:
+   CPU time = 24 ms,  elapsed time = 25 ms.
+12:17:23 a. m.
+Total execution time: 00:00:00.080
+
+Enlace del plan: https://www.brentozar.com/pastetheplan/?id=5Z1MA4JdDI

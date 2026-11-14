@@ -1,0 +1,69 @@
+-- ============================================================
+-- Usando Checkpoint y DBCC
+-- ============================================================
+
+12:57:55 a. m.
+Started executing query at  Line 43
+SQL Server parse and compile time: 
+   CPU time = 0 ms, elapsed time = 0 ms.
+ SQL Server Execution Times:
+   CPU time = 2 ms,  elapsed time = 7 ms.
+DBCC execution completed. If DBCC printed error messages, contact your system administrator.
+ SQL Server Execution Times:
+   CPU time = 3 ms,  elapsed time = 3 ms.
+DBCC execution completed. If DBCC printed error messages, contact your system administrator.
+ SQL Server Execution Times:
+   CPU time = 2 ms,  elapsed time = 3 ms.
+12:57:55 a. m.
+Started executing query at  Line 47
+SQL Server parse and compile time: 
+   CPU time = 8 ms, elapsed time = 8 ms.
+(40 rows affected)
+Table 'Worktable'. Scan count 3, logical reads 161, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Workfile'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'citas'. Scan count 1, logical reads 175, physical reads 1, page server reads 0, read-ahead reads 171, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'especialidades'. Scan count 0, logical reads 80, physical reads 1, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'veterinario'. Scan count 1, logical reads 3, physical reads 1, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+(1 row affected)
+ SQL Server Execution Times:
+   CPU time = 25 ms,  elapsed time = 26 ms.
+12:57:55 a. m.
+Total execution time: 00:00:00.080
+
+Enlace Plan: https://www.brentozar.com/pastetheplan/?id=6Kw46aYY1O
+
+-- ============================================================
+-- Sin Checkpoint Ni DBCC
+-- ============================================================
+
+1:00:34 a. m.
+Started executing query at  Line 47
+SQL Server parse and compile time: 
+   CPU time = 0 ms, elapsed time = 0 ms.
+(40 rows affected)
+Table 'Worktable'. Scan count 3, logical reads 161, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Workfile'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'citas'. Scan count 1, logical reads 175, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'especialidades'. Scan count 0, logical reads 80, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'veterinario'. Scan count 1, logical reads 3, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+(1 row affected)
+ SQL Server Execution Times:
+   CPU time = 29 ms,  elapsed time = 28 ms.
+1:00:34 a. m.
+Total execution time: 00:00:00.049
+
+1:00:51 a. m.
+Started executing query at  Line 48
+SQL Server parse and compile time: 
+   CPU time = 0 ms, elapsed time = 0 ms.
+(40 rows affected)
+Table 'Worktable'. Scan count 3, logical reads 161, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Workfile'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'citas'. Scan count 1, logical reads 175, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'especialidades'. Scan count 0, logical reads 80, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'veterinario'. Scan count 1, logical reads 3, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+(1 row affected)
+ SQL Server Execution Times:
+   CPU time = 28 ms,  elapsed time = 28 ms.
+1:00:51 a. m.
+Total execution time: 00:00:00.049

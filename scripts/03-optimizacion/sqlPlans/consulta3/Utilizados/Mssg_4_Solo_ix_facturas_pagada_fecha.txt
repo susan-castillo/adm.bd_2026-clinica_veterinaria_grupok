@@ -1,0 +1,65 @@
+-- ============================================================
+-- Usando Checkpoint y DBCC
+-- ============================================================
+
+7:47:25 a. m.
+Started executing query at  Line 114
+SQL Server parse and compile time: 
+   CPU time = 0 ms, elapsed time = 0 ms.
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 4 ms.
+DBCC execution completed. If DBCC printed error messages, contact your system administrator.
+ SQL Server Execution Times:
+   CPU time = 1 ms,  elapsed time = 1 ms.
+DBCC execution completed. If DBCC printed error messages, contact your system administrator.
+ SQL Server Execution Times:
+   CPU time = 1 ms,  elapsed time = 0 ms.
+7:47:25 a. m.
+Started executing query at  Line 118
+SQL Server parse and compile time: 
+   CPU time = 7 ms, elapsed time = 9 ms.
+(37 rows affected)
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Workfile'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'facturas'. Scan count 1, logical reads 208, physical reads 1, page server reads 0, read-ahead reads 318, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+(1 row affected)
+ SQL Server Execution Times:
+   CPU time = 19 ms,  elapsed time = 20 ms.
+7:47:25 a. m.
+Total execution time: 00:00:00.059
+
+Enlace Plan: https://www.brentozar.com/pastetheplan/?id=6hmDyM55pm
+
+-- ============================================================
+-- Sin Checkpoint Ni DBCC
+-- ============================================================
+
+
+7:49:51 a. m.
+Started executing query at  Line 119
+SQL Server parse and compile time: 
+   CPU time = 5 ms, elapsed time = 5 ms.
+(37 rows affected)
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Workfile'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'facturas'. Scan count 1, logical reads 208, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+(1 row affected)
+ SQL Server Execution Times:
+   CPU time = 21 ms,  elapsed time = 21 ms.
+7:49:51 a. m.
+Total execution time: 00:00:00.043
+
+
+7:50:07 a. m.
+Started executing query at  Line 119
+SQL Server parse and compile time: 
+   CPU time = 0 ms, elapsed time = 0 ms.
+(37 rows affected)
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Workfile'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'facturas'. Scan count 1, logical reads 208, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+(1 row affected)
+ SQL Server Execution Times:
+   CPU time = 25 ms,  elapsed time = 25 ms.
+7:50:07 a. m.
+Total execution time: 00:00:00.054

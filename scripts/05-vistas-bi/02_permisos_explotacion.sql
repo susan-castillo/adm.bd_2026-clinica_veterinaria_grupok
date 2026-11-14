@@ -19,7 +19,11 @@ USE db_veterinaria;
 GO
 
 -- 6. Otorgar permisos SELECT de lectura explícita sobre el esquema 'bi'
-GRANT SELECT ON SCHEMA::bi TO rol_reportes_bi;
+GRANT SELECT ON SCHEMA::bi TO rol_desarrollador_bi;
+GO
+
+-- Eliminar el usuario creado con WITHOUT LOGIN
+DROP USER IF EXISTS usuario_powerbi;
 GO
 
 -- 7. Creación del usuario para Power BI con su contraseña
@@ -29,5 +33,5 @@ IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'usuario_power
     END
 GO
 -- 8. Vinculación al rol de reportes/BI para que herede los permisos SELECT
-ALTER ROLE rol_reportes_bi ADD MEMBER usuario_powerbi;
+ALTER ROLE rol_desarrollador_bi ADD MEMBER usuario_powerbi;
 GO

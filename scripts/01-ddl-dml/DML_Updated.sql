@@ -1,9 +1,10 @@
--- DML de prueba compatible con el DDL y los triggers separados.
--- Cantidades iniciales del dimensionamiento del documento:
--- especies 17; razas 61; propietarios 20; mascotas 71;
--- especialidades 20; veterinario 40; medicamentos 30; citas 71;
--- diagnosticos 40; procedimientos 40; tratamiento 40;
--- detalles_tratamientos 40; facturas 30; detalles_facturas 50.
+/*
+DML_Updated.sql: GENERADOR DE DATOS MASIVOS (solo documentacion, NO ejecutar)
+
+Para tener los datos, restaurar el .bak
+(ver README_Restore.md). Ejecutarlo de nuevo daria datos distintos (NEWID) y duplicaria filas.
+*/
+
 -- Ejecutar antes 02_Triggers_Veterinaria.sql. Este archivo no crea ni modifica triggers.
 USE db_veterinaria;
 GO
@@ -866,4 +867,443 @@ UNION ALL
 SELECT N'facturacion.facturas' AS tabla, COUNT_BIG(*) AS registros FROM facturacion.facturas
 UNION ALL
 SELECT N'facturacion.detalles_facturas' AS tabla, COUNT_BIG(*) AS registros FROM facturacion.detalles_facturas;
+GO
+-- ============================================================================
+-- BLOQUE MASIVO (se anexa DESPUES del ultimo GO de DML_Original.sql)
+-- DML_Updated.sql = DML_Original.sql + este bloque.
+--
+-- Requisitos: DDL y Triggers ya ejecutados; GENERATE_SERIES (SQL Server 2022+).
+-- Todo es DETERMINISTA (hash SHA2_256 sobre ids + semilla, sin NEWID): regenerar da la misma forma.
+-- Fechas relativas a hoy: citas en los ultimos 3 años, con mas densidad reciente
+-- (clinica en crecimiento, util para C3).
+--
+-- Proporciones (N = @N_CITAS = total de citas, incluidas las 71 originales):
+--   mascotas        = N / 10          (~10 citas por mascota; sirve para C2)
+--   propietarios    = mascotas / 1.7
+--   citas nuevas    : 85% Completada, 15% Cancelada
+--   diagnosticos    : 1 por cita Completada
+--   procedimientos  : 60% de los diagnosticos
+--   tratamiento     : 70% de los diagnosticos
+--   detalles_trat.  : 1 a 2 por tratamiento (50% llevan 2)
+--   facturas        : 90% de las citas Completadas nuevas (80% Pagada, 12% Pendiente, 8% Anulada)
+--   detalles_fact.  : linea de consulta + procedimientos + medicamentos (~2.6 por factura)
+-- ============================================================================
+USE db_veterinaria;
+GO
+SET NOCOUNT ON;
+SET XACT_ABORT ON;
+
+IF @@TRANCOUNT <> 0
+    THROW 51100, N'Ejecute este bloque fuera de otra transaccion.', 1;
+
+-- ---------------------------------------------------------------- PARAMETROS
+DECLARE @N_CITAS int = 100000;                       -- unico numero que hay que tocar para escalar
+DECLARE @N_MASC  int = @N_CITAS / 10;
+DECLARE @N_PROP  int = CAST(@N_MASC / 1.7 AS int);
+DECLARE @hoy     date = CAST(SYSDATETIME() AS date);
+
+DECLARE @p0 int = (SELECT COALESCE(MAX(id_propietario),0) FROM pacientes.propietarios);
+DECLARE @m0 int = (SELECT COALESCE(MAX(id_mascota),0)     FROM pacientes.mascotas);
+DECLARE @c0 int = (SELECT COALESCE(MAX(id_cita),0)        FROM clinica.citas);
+DECLARE @f0 bigint = (SELECT COALESCE(MAX(id_factura),0)  FROM facturacion.facturas);
+DECLARE @n_vet int = (SELECT COUNT(*) FROM personal.veterinario);
+
+-- ---------------------------------------------------------------- PRECONDICIONES
+-- La base debe venir del DML original (ids contiguos, catalogos completos).
+IF (SELECT COUNT_BIG(*) FROM pacientes.propietarios) <> @p0
+ OR (SELECT COUNT_BIG(*) FROM pacientes.mascotas)    <> @m0
+ OR (SELECT COUNT_BIG(*) FROM clinica.citas)         <> @c0
+ OR (SELECT COUNT_BIG(*) FROM personal.veterinario)  <> (SELECT MAX(id_veterinario) FROM personal.veterinario)
+    THROW 51101, N'Los ids no son contiguos. Ejecute primero el DML original completo sobre una base limpia.', 1;
+IF (SELECT COUNT_BIG(*) FROM pacientes.razas) <> 61
+ OR (SELECT COUNT_BIG(*) FROM farmacia.medicamentos) <> 30
+ OR @n_vet <> 40
+    THROW 51102, N'Catalogos (razas, medicamentos, veterinarios) distintos a los del DML original.', 1;
+IF (SELECT COUNT_BIG(*) FROM pacientes.razas r JOIN pacientes.especies e ON e.id_especie=r.id_especie
+    WHERE (r.id_raza BETWEEN 1 AND 5 AND e.nombre_e<>N'Can') OR (r.id_raza BETWEEN 6 AND 10 AND e.nombre_e<>N'Felino')) <> 0
+    THROW 51103, N'El orden de razas no coincide (1-5 Can, 6-10 Felino).', 1;
+IF @N_MASC <= @m0 OR @N_PROP <= @p0 OR @N_CITAS <= @c0
+    THROW 51104, N'@N_CITAS es demasiado pequeño para la base existente.', 1;
+
+BEGIN TRY
+
+-- ---------------------------------------------------------------- CATALOGOS TEMPORALES
+CREATE TABLE #cat (
+    idx int PRIMARY KEY,
+    motivo  nvarchar(100) COLLATE DATABASE_DEFAULT, costo decimal(10,2),
+    diag    nvarchar(200) COLLATE DATABASE_DEFAULT, obs   nvarchar(300) COLLATE DATABASE_DEFAULT,
+    proc_n  nvarchar(100) COLLATE DATABASE_DEFAULT, proc_d nvarchar(300) COLLATE DATABASE_DEFAULT, proc_c decimal(10,2),
+    trat    nvarchar(200) COLLATE DATABASE_DEFAULT, ind   nvarchar(300) COLLATE DATABASE_DEFAULT,
+    med1 bigint, med2 bigint,
+    d1 nvarchar(100) COLLATE DATABASE_DEFAULT, f1 nvarchar(100) COLLATE DATABASE_DEFAULT, n1 int,
+    d2 nvarchar(100) COLLATE DATABASE_DEFAULT, f2 nvarchar(100) COLLATE DATABASE_DEFAULT, n2 int);
+
+INSERT INTO #cat VALUES
+(1, N'Consulta general', 20, N'Paciente clínicamente sano', N'Sin hallazgos relevantes; continuar controles preventivos.',
+    N'Examen físico completo', N'Auscultación, palpación y toma de signos vitales.', 10,
+    N'Seguimiento preventivo', N'Mantener alimentación balanceada y control en seis meses.',
+    12, 5, N'1 tableta vía oral', N'Dosis única', 1, N'1 tableta masticable total', N'Dosis única', 1),
+(2, N'Vacunación anual', 25, N'Paciente apto para vacunación anual', N'Sin hallazgos previos a la inmunización.',
+    N'Aplicación de vacuna polivalente', N'Inyección subcutánea según esquema anual.', 15,
+    N'Monitoreo post-vacunal', N'Reportar decaimiento, fiebre o vómito en las siguientes 48 horas.',
+    12, 3, N'1 tableta vía oral', N'Dosis única', 1, N'1.0 ml vía oral', N'Cada 8 horas', 3),
+(3, N'Desparasitación', 15, N'Parasitosis intestinal leve', N'Huevos de parásitos detectados en examen coprológico.',
+    N'Coprológico por flotación', N'Examen de descarte de parásitos gastrointestinales.', 10,
+    N'Plan antiparasitario', N'Repetir dosis a los 15 días y verificar las heces.',
+    12, 13, N'1 tableta vía oral', N'Dosis única', 1, N'1 tableta masticable total', N'Dosis única', 1),
+(4, N'Control de peso', 18, N'Sobrepeso leve', N'Se recomienda dieta balanceada y ejercicio diario.',
+    N'Evaluación nutricional', N'Análisis de condición corporal y plan alimenticio.', 20,
+    N'Plan de reducción de peso', N'Pesar la ración y evitar premios fuera de la dieta.',
+    17, 8, N'1 tableta masticable por la mañana', N'Cada 24 horas', 30, N'6 gotas vía oral', N'Cada 24 horas', 5),
+(5, N'Chequeo preventivo', 22, N'Chequeo de rutina conforme', N'Buena condición corporal y mucosas normales.',
+    N'Hemograma completo de control', N'Evaluación de rutina de células sanguíneas.', 15,
+    N'Suplementación general', N'Mezclar con el alimento húmedo diariamente.',
+    5, 12, N'1 tableta masticable total', N'Dosis única', 1, N'1 tableta vía oral', N'Dosis única', 1),
+(6, N'Consulta dermatológica', 30, N'Dermatitis alérgica', N'Lesiones eritematosas y prurito en región inguinal.',
+    N'Raspado de piel superficial', N'Toma de muestra para descartar ectoparásitos.', 10,
+    N'Control de dermatitis y ectoparásitos', N'Baños medicados y evitar contacto con alérgenos.',
+    11, 20, N'Baño completo dos veces por semana', N'Cada 3 días', 14, N'Aplicar una capa fina sobre la lesión', N'Cada 12 horas', 10),
+(7, N'Problema digestivo', 32, N'Gastroenteritis aguda', N'Vómitos y diarrea con hidratación conservada.',
+    N'Fluidoterapia ambulatoria', N'Administración intravenosa de solución Hartman.', 25,
+    N'Soporte digestivo agudo', N'Dieta blanda en porciones pequeñas cada 4 horas.',
+    29, 25, N'1 tableta vía oral', N'Cada 12 horas', 7, N'1 cápsula vía oral', N'Cada 24 horas', 10),
+(8, N'Revisión ocular', 30, N'Conjuntivitis bacteriana', N'Secreción purulenta ocular.',
+    N'Prueba de fluoresceína', N'Tinción ocular para descartar úlcera corneal.', 8,
+    N'Terapia oftálmica antibacteriana', N'Aplicar el colirio en los horarios indicados.',
+    7, 23, N'2 gotas en el ojo afectado', N'Cada 6 horas', 7, N'Aplicar tira de ungüento en el ojo', N'Cada 12 horas', 7),
+(9, N'Control postoperatorio', 40, N'Recuperación favorable tras cirugía', N'Cicatrización adecuada; retirar puntos en la próxima consulta.',
+    N'Control postquirúrgico', N'Revisión de la herida y retiro de suturas.', 22,
+    N'Manejo analgésico postoperatorio', N'Reposo, evitar esfuerzos y mantener la herida limpia.',
+    28, 19, N'1/2 tableta vía oral', N'Cada 12 horas', 7, N'1.0 ml suspensión vía oral', N'Cada 12 horas', 7),
+(10, N'Evaluación cardiológica', 45, N'Soplo cardíaco grado II/VI', N'Cardiomiopatía en fase inicial; controles periódicos.',
+    N'Ecocardiograma Doppler', N'Evaluación de cámaras cardíacas y flujo sanguíneo.', 65,
+    N'Terapia cardíaca de mantenimiento', N'Evitar ejercicio extremo y emociones fuertes.',
+    10, 16, N'1/2 tableta vía oral', N'Cada 24 horas', 30, N'1/4 tableta vía oral', N'Cada 24 horas', 14),
+(11, N'Consulta por alergia', 35, N'Dermatitis alérgica por pulga (DAPP)', N'Lesiones alopécicas en la zona lumbosacra.',
+    N'Citología de piel', N'Identificación microscópica de levaduras y parásitos.', 12,
+    N'Control de ectoparásitos y alergia', N'Tratar también el ambiente del hogar.',
+    22, 13, N'1 tableta vía oral', N'Cada 24 horas', 14, N'1 tableta masticable total', N'Dosis única', 1),
+(12, N'Problema respiratorio', 35, N'Infección respiratoria leve', N'Estornudos y secreción nasal serosa.',
+    N'Nebulización', N'Terapia respiratoria para eliminar secreciones.', 20,
+    N'Soporte antibiótico respiratorio', N'Completar los antibióticos y evitar la exposición al frío.',
+    24, 19, N'1 tableta vía oral', N'Cada 24 horas', 10, N'1.0 ml suspensión vía oral', N'Cada 12 horas', 10);
+
+CREATE TABLE #nom (idx int PRIMARY KEY, nombre varchar(30) COLLATE DATABASE_DEFAULT, genero varchar(1) COLLATE DATABASE_DEFAULT);
+INSERT INTO #nom VALUES
+(1,'Maria','F'),(2,'Ana','F'),(3,'Carmen','F'),(4,'Lucia','F'),(5,'Patricia','F'),(6,'Rosa','F'),
+(7,'Elena','F'),(8,'Sandra','F'),(9,'Claudia','F'),(10,'Karla','F'),(11,'Monica','F'),(12,'Beatriz','F'),
+(13,'Jose','M'),(14,'Juan','M'),(15,'Carlos','M'),(16,'Luis','M'),(17,'Miguel','M'),(18,'Pedro','M'),
+(19,'Jorge','M'),(20,'Mario','M'),(21,'Oscar','M'),(22,'Rafael','M'),(23,'Hector','M'),(24,'Manuel','M');
+
+CREATE TABLE #ape (idx int PRIMARY KEY, apellido varchar(30) COLLATE DATABASE_DEFAULT);
+INSERT INTO #ape VALUES
+(1,'Hernandez'),(2,'Martinez'),(3,'Lopez'),(4,'Gonzalez'),(5,'Rodriguez'),(6,'Perez'),(7,'Sanchez'),(8,'Ramirez'),
+(9,'Flores'),(10,'Gomez'),(11,'Diaz'),(12,'Reyes'),(13,'Morales'),(14,'Cruz'),(15,'Ortiz'),(16,'Gutierrez'),
+(17,'Chavez'),(18,'Ramos'),(19,'Mendoza'),(20,'Ruiz'),(21,'Alvarado'),(22,'Guevara'),(23,'Serrano'),(24,'Menendez');
+
+CREATE TABLE #col (idx int PRIMARY KEY, dir nvarchar(120) COLLATE DATABASE_DEFAULT);
+INSERT INTO #col VALUES
+(1,N'Colonia Escalón, San Salvador'),(2,N'Colonia San Benito, San Salvador'),(3,N'Colonia Miramonte, San Salvador'),
+(4,N'Residencial Santa Elena, Antiguo Cuscatlán'),(5,N'Urbanización California, Santa Tecla'),(6,N'Colonia Médica, San Salvador'),
+(7,N'Reparto Los Héroes, San Salvador'),(8,N'Colonia Centroamérica, San Salvador'),(9,N'Ciudad Merliot, Antiguo Cuscatlán'),
+(10,N'Colonia Layco, San Salvador'),(11,N'Residencial Las Colinas, Santa Tecla'),(12,N'Colonia Flor Blanca, San Salvador');
+
+CREATE TABLE #pn (idx int PRIMARY KEY, nombre nvarchar(50) COLLATE DATABASE_DEFAULT);
+INSERT INTO #pn VALUES
+(1,N'Max'),(2,N'Luna'),(3,N'Rocky'),(4,N'Nala'),(5,N'Toby'),(6,N'Lola'),(7,N'Simba'),(8,N'Mia'),(9,N'Coco'),(10,N'Bella'),
+(11,N'Thor'),(12,N'Kira'),(13,N'Duke'),(14,N'Maya'),(15,N'Rex'),(16,N'Lucky'),(17,N'Nina'),(18,N'Zeus'),(19,N'Chispa'),(20,N'Canela'),
+(21,N'Bruno'),(22,N'Mora'),(23,N'Pelusa'),(24,N'Tigre'),(25,N'Milo'),(26,N'Kiara'),(27,N'Rufo'),(28,N'Perla'),(29,N'Oso'),(30,N'Frida');
+
+-- ---------------------------------------------------------------- 1. PROPIETARIOS
+BEGIN TRANSACTION;
+INSERT INTO pacientes.propietarios
+    (dui_p, nombre_p, apellido_p, genero_p, telefono_p, telefono_secundario_p, correo_p, direccion_p)
+SELECT
+    RIGHT('00000000' + CAST(30000000 + g.n AS varchar(8)), 8) + '-' + CAST(g.n % 10 AS varchar(1)),
+    nm.nombre, ap.apellido, nm.genero,
+    STUFF(CAST(78000000 + g.n AS varchar(8)), 5, 0, '-'),
+    STUFF(CAST(22000000 + g.n AS varchar(8)), 5, 0, '-'),
+    LOWER(CONCAT(nm.nombre, '.', ap.apellido, g.n, '@',
+         CASE g.n % 4 WHEN 0 THEN 'gmail.com' WHEN 1 THEN 'hotmail.com' WHEN 2 THEN 'yahoo.com' ELSE 'outlook.com' END)),
+    co.dir
+FROM (SELECT CAST(value AS int) AS n FROM GENERATE_SERIES(1, @N_PROP - @p0)) g
+JOIN #nom nm ON nm.idx = 1 + (CAST(SUBSTRING(HASHBYTES('SHA2_256', CONCAT(g.n, ':', 1)), 1, 4) AS int) & 2147483647) % 24
+JOIN #ape ap ON ap.idx = 1 + (CAST(SUBSTRING(HASHBYTES('SHA2_256', CONCAT(g.n, ':', 2)), 1, 4) AS int) & 2147483647) % 24
+JOIN #col co ON co.idx = 1 + (CAST(SUBSTRING(HASHBYTES('SHA2_256', CONCAT(g.n, ':', 3)), 1, 4) AS int) & 2147483647) % 12
+ORDER BY g.n;
+COMMIT;
+
+-- ---------------------------------------------------------------- 2. MASCOTAS
+-- 55% perros, 30% gatos, 15% otras especies. Fecha de nacimiento anterior a 3.3 años
+-- para que toda cita (ultimos 3 años) ocurra despues del nacimiento.
+BEGIN TRANSACTION;
+INSERT INTO pacientes.mascotas
+    (id_propietario, id_raza, nombre_m, fecha_nacimiento, sexo_m, peso_m, tamanio_m)
+SELECT
+    ((@m0 + g.n - 1) % @N_PROP) + 1,
+    r.id_raza,
+    mn.nombre,
+    DATEADD(DAY, -(1200 + (CAST(SUBSTRING(HASHBYTES('SHA2_256', CONCAT(g.n, ':', 24)), 1, 4) AS int) & 2147483647) % 4300), @hoy),
+    CASE (CAST(SUBSTRING(HASHBYTES('SHA2_256', CONCAT(g.n, ':', 25)), 1, 4) AS int) & 2147483647) % 2 WHEN 0 THEN N'Macho' ELSE N'Hembra' END,
+    w.peso,
+    CASE WHEN gr.grp = 3 THEN N'Pequeño'
+         WHEN gr.grp = 2 THEN CASE WHEN w.peso >= 5.5 THEN N'Grande' ELSE N'Mediano' END
+         WHEN w.peso < 8  THEN N'Pequeño'
+         WHEN w.peso < 20 THEN N'Mediano'
+         ELSE N'Grande' END
+FROM (SELECT CAST(value AS int) AS n FROM GENERATE_SERIES(1, @N_MASC - @m0)) g
+CROSS APPLY (SELECT u = (CAST(SUBSTRING(HASHBYTES('SHA2_256', CONCAT(g.n, ':', 21)), 1, 4) AS int) & 2147483647) % 100,
+                    v = (CAST(SUBSTRING(HASHBYTES('SHA2_256', CONCAT(g.n, ':', 22)), 1, 4) AS int) & 2147483647),
+                    x = (CAST(SUBSTRING(HASHBYTES('SHA2_256', CONCAT(g.n, ':', 23)), 1, 4) AS int) & 2147483647)) h
+CROSS APPLY (SELECT grp = CASE WHEN h.u < 55 THEN 1 WHEN h.u < 85 THEN 2 ELSE 3 END) gr
+CROSS APPLY (SELECT id_raza = CASE gr.grp WHEN 1 THEN 1 + h.v % 5
+                                          WHEN 2 THEN 6 + h.v % 5
+                                          ELSE 11 + h.v % 51 END) r
+CROSS APPLY (SELECT peso = CAST(CASE gr.grp WHEN 1 THEN 2   + (h.x % 3800) / 100.0
+                                            WHEN 2 THEN 2.5 + (h.x % 450)  / 100.0
+                                            ELSE 0.05 + (h.x % 300) / 100.0 END AS decimal(6,2))) w
+JOIN #pn mn ON mn.idx = 1 + (CAST(SUBSTRING(HASHBYTES('SHA2_256', CONCAT(g.n, ':', 26)), 1, 4) AS int) & 2147483647) % 30
+ORDER BY g.n;
+COMMIT;
+
+-- ---------------------------------------------------------------- 3. CITAS
+-- Ids cronologicos (INSERT ... ORDER BY fecha). Mascotas y veterinarios con sesgo suave
+-- (algunos mas activos) para que rankings y TOP de C1/C2 no sean uniformes.
+BEGIN TRANSACTION;
+;WITH g AS (
+    SELECT CAST(value AS int) AS n FROM GENERATE_SERIES(1, @N_CITAS - @c0)
+), h AS (
+    SELECT n,
+        u1 = (CAST(SUBSTRING(HASHBYTES('SHA2_256', CONCAT(n, ':', 31)), 1, 4) AS int) & 2147483647) % 10000 / 10000e0,
+        u2 = (CAST(SUBSTRING(HASHBYTES('SHA2_256', CONCAT(n, ':', 32)), 1, 4) AS int) & 2147483647) % 10000 / 10000e0,
+        u3 = (CAST(SUBSTRING(HASHBYTES('SHA2_256', CONCAT(n, ':', 34)), 1, 4) AS int) & 2147483647) % 10000 / 10000e0,
+        r_slot = (CAST(SUBSTRING(HASHBYTES('SHA2_256', CONCAT(n, ':', 35)), 1, 4) AS int) & 2147483647) % 20,
+        r_est  = (CAST(SUBSTRING(HASHBYTES('SHA2_256', CONCAT(n, ':', 36)), 1, 4) AS int) & 2147483647) % 100,
+        r_mot  = (CAST(SUBSTRING(HASHBYTES('SHA2_256', CONCAT(n, ':', 33)), 1, 4) AS int) & 2147483647) % 12 + 1,
+        r_can  = (CAST(SUBSTRING(HASHBYTES('SHA2_256', CONCAT(n, ':', 37)), 1, 4) AS int) & 2147483647) % 4 + 1
+    FROM g
+), s AS (
+    SELECT h.n,
+        id_mascota     = 1 + CAST(@N_MASC * POWER(h.u1, 1.2e0) AS int),
+        id_veterinario = 1 + CAST(@n_vet  * POWER(h.u2, 1.4e0) AS int),
+        fecha_c = DATEADD(MINUTE, 480 + 30 * h.r_slot,
+                    CAST(DATEADD(DAY, -(1 + CAST(1094 * POWER(h.u3, 1.25e0) AS int)), @hoy) AS datetime2)),
+        completada = CASE WHEN h.r_est < 85 THEN 1 ELSE 0 END,
+        h.r_mot, h.r_can
+    FROM h
+)
+INSERT INTO clinica.citas (id_mascota, id_veterinario, fecha_c, motivo_c, estado_c, costo_c)
+SELECT s.id_mascota, s.id_veterinario, s.fecha_c,
+       CASE WHEN s.completada = 1 THEN k.motivo
+            ELSE CHOOSE(s.r_can, N'Cita cancelada por el propietario', N'Ausencia del propietario',
+                                 N'Reprogramación solicitada', N'Cancelación por emergencia') END,
+       CASE WHEN s.completada = 1 THEN N'Completada' ELSE N'Cancelada' END,
+       CASE WHEN s.completada = 1 THEN k.costo ELSE CAST(0 AS decimal(10,2)) END
+FROM s JOIN #cat k ON k.idx = s.r_mot
+ORDER BY s.fecha_c, s.n;
+COMMIT;
+
+-- ---------------------------------------------------------------- 4. DIAGNOSTICOS (1 por cita Completada)
+BEGIN TRANSACTION;
+INSERT INTO clinica.diagnosticos (id_cita, descripcion_d, observaciones_d, fecha_d)
+SELECT c.id_cita, k.diag, k.obs, CAST(c.fecha_c AS date)
+FROM clinica.citas c
+JOIN #cat k ON k.motivo = c.motivo_c
+WHERE c.id_cita > @c0 AND c.estado_c = N'Completada'
+ORDER BY c.id_cita;
+COMMIT;
+
+-- ---------------------------------------------------------------- 5. PROCEDIMIENTOS (60%)
+BEGIN TRANSACTION;
+INSERT INTO clinica.procedimientos (id_diagnostico, nombre_p, descripcion_p, costo_p)
+SELECT d.id_diagnostico, k.proc_n, k.proc_d, k.proc_c
+FROM clinica.diagnosticos d
+JOIN clinica.citas c ON c.id_cita = d.id_cita
+JOIN #cat k ON k.motivo = c.motivo_c
+WHERE d.id_cita > @c0
+  AND (CAST(SUBSTRING(HASHBYTES('SHA2_256', CONCAT(d.id_diagnostico, ':', 41)), 1, 4) AS int) & 2147483647) % 10 < 6
+ORDER BY d.id_diagnostico;
+COMMIT;
+
+-- ---------------------------------------------------------------- 6. TRATAMIENTO (70%)
+BEGIN TRANSACTION;
+INSERT INTO clinica.tratamiento (id_diagnostico, fecha_inicio, fecha_fin, descripcion_t, indicaciones_t)
+SELECT d.id_diagnostico, d.fecha_d,
+       DATEADD(DAY, 3 + (CAST(SUBSTRING(HASHBYTES('SHA2_256', CONCAT(d.id_diagnostico, ':', 43)), 1, 4) AS int) & 2147483647) % 25, d.fecha_d),
+       k.trat, k.ind
+FROM clinica.diagnosticos d
+JOIN clinica.citas c ON c.id_cita = d.id_cita
+JOIN #cat k ON k.motivo = c.motivo_c
+WHERE d.id_cita > @c0
+  AND (CAST(SUBSTRING(HASHBYTES('SHA2_256', CONCAT(d.id_diagnostico, ':', 42)), 1, 4) AS int) & 2147483647) % 10 < 7
+ORDER BY d.id_diagnostico;
+COMMIT;
+
+-- ---------------------------------------------------------------- 7. DETALLES_TRATAMIENTOS (1 a 2 por tratamiento)
+-- El trigger INSTEAD OF renumera por tratamiento; aqui solo se da el orden (1, 2).
+BEGIN TRANSACTION;
+INSERT INTO clinica.detalles_tratamientos
+    (id_detalle_tratamiento, id_tratamiento, id_medicamento, dosis_dt, frecuencia_dt, duracion_dias_dt)
+SELECT 1, t.id_tratamiento, k.med1, k.d1, k.f1, k.n1
+FROM clinica.tratamiento t
+JOIN clinica.diagnosticos d ON d.id_diagnostico = t.id_diagnostico
+JOIN clinica.citas c ON c.id_cita = d.id_cita
+JOIN #cat k ON k.motivo = c.motivo_c
+WHERE d.id_cita > @c0
+UNION ALL
+SELECT 2, t.id_tratamiento, k.med2, k.d2, k.f2, k.n2
+FROM clinica.tratamiento t
+JOIN clinica.diagnosticos d ON d.id_diagnostico = t.id_diagnostico
+JOIN clinica.citas c ON c.id_cita = d.id_cita
+JOIN #cat k ON k.motivo = c.motivo_c
+WHERE d.id_cita > @c0
+  AND (CAST(SUBSTRING(HASHBYTES('SHA2_256', CONCAT(t.id_tratamiento, ':', 52)), 1, 4) AS int) & 2147483647) % 2 = 0;
+COMMIT;
+
+-- ---------------------------------------------------------------- 8. STOCK + FACTURAS
+-- El trigger de inventario rechaza stock < 0: se sube el stock antes de facturar.
+-- La demanda crece con N; el medicamento mas usado (id 12) gasta ~16% de N.
+-- Con N/2 sobra margen (N = 100,000 -> +50,000 unidades por medicamento).
+UPDATE farmacia.medicamentos SET stock_m = stock_m + @N_CITAS / 2;
+SELECT id_medicamento, stock_m INTO #Stock2 FROM farmacia.medicamentos;
+
+BEGIN TRANSACTION;
+INSERT INTO facturacion.facturas (id_cita, fecha_emision_f, estado_f, total_f)
+SELECT c.id_cita, CAST(c.fecha_c AS date), N'Pendiente', 0
+FROM clinica.citas c
+WHERE c.id_cita > @c0
+  AND c.estado_c = N'Completada'
+  AND (CAST(SUBSTRING(HASHBYTES('SHA2_256', CONCAT(c.id_cita, ':', 61)), 1, 4) AS int) & 2147483647) % 10 < 9
+ORDER BY c.id_cita;
+COMMIT;
+
+-- ---------------------------------------------------------------- 9. DETALLES_FACTURAS (por lotes de facturas)
+-- Los triggers calculan total_f y descuentan inventario.
+DECLARE @lote int = 20000;
+DECLARE @desde bigint = @f0 + 1;
+DECLARE @hasta bigint;
+DECLARE @fmax  bigint = (SELECT MAX(id_factura) FROM facturacion.facturas);
+
+WHILE @desde <= @fmax
+BEGIN
+    SET @hasta = @desde + @lote - 1;
+    BEGIN TRANSACTION;
+    ;WITH items AS (
+        SELECT f.id_factura, c.id_cita, CAST(NULL AS bigint) AS id_medicamento,
+               CAST(NULL AS bigint) AS id_tratamiento, CAST(NULL AS bigint) AS id_procedimiento,
+               CONCAT(N'Consulta: ', c.motivo_c) AS descripcion_df,
+               CAST(1 AS bigint) AS cantidad_df, c.costo_c AS precio_unit_df,
+               1 AS tipo, CAST(0 AS bigint) AS orden
+        FROM facturacion.facturas f
+        JOIN clinica.citas c ON c.id_cita = f.id_cita
+        WHERE f.id_factura BETWEEN @desde AND @hasta
+        UNION ALL
+        SELECT f.id_factura, NULL, NULL, NULL, p.id_procedimiento,
+               CONCAT(N'Procedimiento: ', p.nombre_p), 1, p.costo_p, 2, p.id_procedimiento
+        FROM facturacion.facturas f
+        JOIN clinica.diagnosticos d ON d.id_cita = f.id_cita
+        JOIN clinica.procedimientos p ON p.id_diagnostico = d.id_diagnostico
+        WHERE f.id_factura BETWEEN @desde AND @hasta
+        UNION ALL
+        SELECT f.id_factura, NULL, m.id_medicamento, t.id_tratamiento, NULL,
+               CONCAT(N'Medicamento: ', m.nombre_m, N' - ', m.presentacion_m), 1, m.precio_m,
+               3, dt.id_detalle_tratamiento
+        FROM facturacion.facturas f
+        JOIN clinica.diagnosticos d ON d.id_cita = f.id_cita
+        JOIN clinica.tratamiento t ON t.id_diagnostico = d.id_diagnostico
+        JOIN clinica.detalles_tratamientos dt ON dt.id_tratamiento = t.id_tratamiento
+        JOIN farmacia.medicamentos m ON m.id_medicamento = dt.id_medicamento
+        WHERE f.id_factura BETWEEN @desde AND @hasta
+    )
+    INSERT INTO facturacion.detalles_facturas
+        (id_detalle_factura, id_factura, id_cita, id_medicamento, id_tratamiento,
+         id_procedimiento, descripcion_df, cantidad_df, precio_unit_df)
+    SELECT ROW_NUMBER() OVER (PARTITION BY id_factura ORDER BY tipo, orden),
+           id_factura, id_cita, id_medicamento, id_tratamiento, id_procedimiento,
+           descripcion_df, cantidad_df, precio_unit_df
+    FROM items;
+    COMMIT;
+    SET @desde = @hasta + 1;
+END;
+
+-- ---------------------------------------------------------------- 10. ESTADO DE FACTURAS
+-- Ya tienen total > 0 (lo calculo el trigger), por eso se permite Pagada.
+BEGIN TRANSACTION;
+UPDATE facturacion.facturas
+SET estado_f = CASE
+        WHEN (CAST(SUBSTRING(HASHBYTES('SHA2_256', CONCAT(id_factura, ':', 71)), 1, 4) AS int) & 2147483647) % 100 < 80 THEN N'Pagada'
+        WHEN (CAST(SUBSTRING(HASHBYTES('SHA2_256', CONCAT(id_factura, ':', 71)), 1, 4) AS int) & 2147483647) % 100 < 92 THEN N'Pendiente'
+        ELSE N'Anulada' END
+WHERE id_factura > @f0;
+COMMIT;
+
+-- ---------------------------------------------------------------- VALIDACIONES
+IF (SELECT COUNT_BIG(*) FROM pacientes.propietarios) <> @N_PROP
+ OR (SELECT COUNT_BIG(*) FROM pacientes.mascotas)    <> @N_MASC
+ OR (SELECT COUNT_BIG(*) FROM clinica.citas)         <> @N_CITAS
+    THROW 51105, N'Conteos de propietarios, mascotas o citas distintos a los esperados.', 1;
+
+IF EXISTS (SELECT 1 FROM clinica.citas c
+           WHERE c.id_cita > @c0 AND c.estado_c = N'Completada'
+             AND NOT EXISTS (SELECT 1 FROM clinica.diagnosticos d WHERE d.id_cita = c.id_cita))
+    THROW 51106, N'Hay citas Completadas sin diagnostico.', 1;
+
+IF EXISTS (SELECT 1 FROM clinica.detalles_tratamientos WHERE id_detalle_tratamiento <= 0)
+ OR EXISTS (SELECT 1 FROM facturacion.detalles_facturas WHERE id_detalle_factura <= 0)
+    THROW 51107, N'Numeracion de detalles invalida.', 1;
+
+IF EXISTS (
+    SELECT 1 FROM facturacion.facturas f
+    OUTER APPLY (SELECT SUM(subtotal_df) total FROM facturacion.detalles_facturas d
+                 WHERE d.id_factura = f.id_factura) s
+    WHERE f.total_f <> COALESCE(s.total, 0))
+    THROW 51108, N'Total de factura inconsistente.', 1;
+
+IF EXISTS (
+    SELECT 1 FROM farmacia.medicamentos m
+    JOIN #Stock2 s ON s.id_medicamento = m.id_medicamento
+    OUTER APPLY (SELECT SUM(cantidad_df) vendidas FROM facturacion.detalles_facturas d
+                 WHERE d.id_medicamento = m.id_medicamento AND d.id_factura > @f0) v
+    WHERE m.stock_m <> s.stock_m - COALESCE(v.vendidas, 0))
+    THROW 51109, N'Descuento de inventario inconsistente.', 1;
+
+IF EXISTS (SELECT 1 FROM facturacion.facturas f
+           WHERE f.id_factura > @f0
+             AND (SELECT COUNT(*) FROM facturacion.detalles_facturas d
+                  WHERE d.id_factura = f.id_factura AND d.id_cita = f.id_cita) <> 1)
+    THROW 51110, N'Cada factura nueva debe tener exactamente una linea de consulta.', 1;
+
+DROP TABLE #Stock2;
+DROP TABLE #cat; DROP TABLE #nom; DROP TABLE #ape; DROP TABLE #col; DROP TABLE #pn;
+PRINT N'Carga masiva completada y verificada.';
+END TRY
+BEGIN CATCH
+    IF XACT_STATE() <> 0 ROLLBACK TRANSACTION;
+    THROW;
+END CATCH;
+GO
+
+-- ---------------------------------------------------------------- RESUMEN
+SELECT N'pacientes.especies' AS tabla, COUNT_BIG(*) AS registros FROM pacientes.especies
+UNION ALL SELECT N'pacientes.razas',              COUNT_BIG(*) FROM pacientes.razas
+UNION ALL SELECT N'pacientes.propietarios',       COUNT_BIG(*) FROM pacientes.propietarios
+UNION ALL SELECT N'pacientes.mascotas',           COUNT_BIG(*) FROM pacientes.mascotas
+UNION ALL SELECT N'personal.especialidades',      COUNT_BIG(*) FROM personal.especialidades
+UNION ALL SELECT N'personal.veterinario',         COUNT_BIG(*) FROM personal.veterinario
+UNION ALL SELECT N'farmacia.medicamentos',        COUNT_BIG(*) FROM farmacia.medicamentos
+UNION ALL SELECT N'clinica.citas',                COUNT_BIG(*) FROM clinica.citas
+UNION ALL SELECT N'clinica.diagnosticos',         COUNT_BIG(*) FROM clinica.diagnosticos
+UNION ALL SELECT N'clinica.procedimientos',       COUNT_BIG(*) FROM clinica.procedimientos
+UNION ALL SELECT N'clinica.tratamiento',          COUNT_BIG(*) FROM clinica.tratamiento
+UNION ALL SELECT N'clinica.detalles_tratamientos',COUNT_BIG(*) FROM clinica.detalles_tratamientos
+UNION ALL SELECT N'facturacion.facturas',         COUNT_BIG(*) FROM facturacion.facturas
+UNION ALL SELECT N'facturacion.detalles_facturas',COUNT_BIG(*) FROM facturacion.detalles_facturas;
+
+SELECT estado_c AS estado_cita, COUNT_BIG(*) AS n,
+       CAST(100.0 * COUNT_BIG(*) / SUM(COUNT_BIG(*)) OVER () AS decimal(5,2)) AS pct
+FROM clinica.citas GROUP BY estado_c;
+
+SELECT estado_f AS estado_factura, COUNT_BIG(*) AS n,
+       CAST(100.0 * COUNT_BIG(*) / SUM(COUNT_BIG(*)) OVER () AS decimal(5,2)) AS pct
+FROM facturacion.facturas GROUP BY estado_f;
 GO
