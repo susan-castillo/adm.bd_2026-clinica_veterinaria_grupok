@@ -1,11 +1,7 @@
-/*
-DML_Updated.sql: GENERADOR DE DATOS MASIVOS (solo documentacion, NO ejecutar)
 
-Para tener los datos, restaurar el .bak
-(ver README_Restore.md). Ejecutarlo de nuevo daria datos distintos (NEWID) y duplicaria filas.
-*/
+-- Para tener los datos, restaurar el .bak (Miren README_Restore.md).
+-- Ejecutar antes 02_Triggers_Veterinaria.sql. Aqui no se creaan triggers.
 
--- Ejecutar antes 02_Triggers_Veterinaria.sql. Este archivo no crea ni modifica triggers.
 USE db_veterinaria;
 GO
 SET NOCOUNT ON;
