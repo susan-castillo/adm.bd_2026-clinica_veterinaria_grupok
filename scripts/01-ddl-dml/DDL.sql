@@ -1,10 +1,11 @@
 ﻿-- PARA ELIMINAR LA BASE DE DATOS
---USE master;
--- GO
--- ALTER DATABASE db_veterinaria SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
--- GO
--- DROP DATABASE db_veterinaria;
--- GO
+/*USE master;
+GO
+ALTER DATABASE db_veterinaria SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+GO
+DROP DATABASE db_veterinaria;
+GO
+*/
 
 -- 01. DDL: estructura original, sin triggers ni datos.
 IF DB_ID(N'db_veterinaria') IS NULL
