@@ -1,60 +1,32 @@
 /*
--- SECCION 3: Consultas analiticas, indices y planes de ejecucion
--- ============================================================
---  Conectar a veterinaria_perf y activar "Actual Plan" en VS Code.
---  borrar todos los indices (estado "sin indice").
---  por cada consulta (1, 2 y 3), ejecutar su bloque completo
---     Guardar:
---       - Messages 
---       - Plan real 
---  crear los indices (una sola vez).
---  repetir las MISMAS consultas. Guardar:
---       - Messages  
---       - Plan real 
--- NO ejecutar en db_veterinaria: la limpieza de cache es solo para pruebas.
+SECCION 3: Consultas analiticas, indices y planes de ejecucion
+Base: db_veterinaria (restaurada desde DataBase_UpdatedData.bak). Activar "Actual Plan" en VS Code.
+
+Flujo por consulta (C1, C2, C3):
+  1. Estado "sin indice": ejecutar el bloque y guardar Messages + plan real.
+  2. Crear los indices y repetir EXACTAMENTE el mismo bloque.
+Los DBCC son solo para pruebas locales: no ejecutarlos en una instancia compartida.
 */
 
-USE veterinaria_perf;
-GO
-
--- Activa lecturas logicas (IO) y tiempos (TIME) para toda la sesion.
 SET STATISTICS IO ON;
 SET STATISTICS TIME ON;
 GO
 
-
 -- ESTADO "SIN INDICE"
--- Borra los indices del equipo y los propios. Quedan solo PK y UNIQUE.
-DROP INDEX IF EXISTS IX_mascotas_propietario        ON pacientes.mascotas;
-DROP INDEX IF EXISTS IX_mascotas_raza               ON pacientes.mascotas;
-DROP INDEX IF EXISTS IX_veterinario_especialidad    ON personal.veterinario;
-DROP INDEX IF EXISTS IX_citas_mascota               ON clinica.citas;
-DROP INDEX IF EXISTS IX_citas_veterinario           ON clinica.citas;
-DROP INDEX IF EXISTS IX_citas_fecha                 ON clinica.citas;
-DROP INDEX IF EXISTS IX_procedimientos_diagnostico  ON clinica.procedimientos;
-DROP INDEX IF EXISTS IX_tratamiento_diagnostico     ON clinica.tratamiento;
-DROP INDEX IF EXISTS IX_dt_medicamento              ON clinica.detalles_tratamientos;
-DROP INDEX IF EXISTS IX_df_cita                     ON facturacion.detalles_facturas;
-DROP INDEX IF EXISTS IX_df_medicamento              ON facturacion.detalles_facturas;
-DROP INDEX IF EXISTS IX_df_tratamiento              ON facturacion.detalles_facturas;
-DROP INDEX IF EXISTS IX_df_procedimiento            ON facturacion.detalles_facturas;
-
--- Indices propios (uno por consulta)
-DROP INDEX IF EXISTS ix_citas_estado_fecha          ON clinica.citas;
-DROP INDEX IF EXISTS ix_citas_estado_mascota_fecha  ON clinica.citas;
-DROP INDEX IF EXISTS ix_facturas_estado_fecha       ON facturacion.facturas;
+DROP INDEX IF EXISTS ix_citas_estado_fecha         ON clinica.citas;
+DROP INDEX IF EXISTS ix_citas_estado_mascota_fecha ON clinica.citas;
+DROP INDEX IF EXISTS ix_facturas_estado_fecha      ON facturacion.facturas;
 GO
 
--- CONSULTAS (se ejecutan antes y despues de crear indices)
--- Cada bloque: limpia cache para una medicion justa y luego ejecuta.
+-- ============================================================
+-- CONSULTAS (cada bloque limpia cache antes de medir)
+-- ============================================================
 
--- ------------------------------------------------------------
--- CONSULTA 1: Productividad y ranking de veterinarios por especialidad
--- Ventanas: RANK() y SUM(COUNT(*)) OVER (PARTITION BY especialidad).
--- ------------------------------------------------------------
+-- C1: Productividad y ranking de veterinarios por especialidad (ultimo año)
+-- Ventanas: RANK(), SUM(COUNT(*)) OVER (PARTITION BY especialidad)
 CHECKPOINT;
-DBCC DROPCLEANBUFFERS;   -- vacia cache de datos
-DBCC FREEPROCCACHE;      -- vacia cache de planes
+DBCC DROPCLEANBUFFERS;
+DBCC FREEPROCCACHE;
 GO
 
 SELECT
@@ -78,17 +50,14 @@ GROUP BY esp.id_especialidad, esp.nombre_esp,
 ORDER BY esp.nombre_esp, ranking_en_especialidad;
 GO
 
--- ------------------------------------------------------------
--- CONSULTA 2: Frecuencia de visitas y dias transcurridos por mascota
--- Ventana: LAG() para obtener la visita anterior de cada mascota.
--- ------------------------------------------------------------
+-- C2: Frecuencia de visitas y dias entre visitas por mascota (TOP 20)
+-- Ventana: LAG() sobre la visita anterior de cada mascota
 CHECKPOINT;
 DBCC DROPCLEANBUFFERS;
 DBCC FREEPROCCACHE;
 GO
 
 WITH visitas AS (
-    -- Cada visita completada junto con la fecha de la visita anterior
     SELECT
         c.id_mascota,
         c.fecha_c,
@@ -98,7 +67,6 @@ WITH visitas AS (
     WHERE c.estado_c = N'Completada'
 ),
 resumen AS (
-    -- Una fila por mascota: frecuencia y dias entre visitas
     SELECT
         v.id_mascota,
         COUNT(*)                                                 AS total_visitas,
@@ -121,17 +89,14 @@ JOIN pacientes.mascotas m ON m.id_mascota = r.id_mascota
 ORDER BY r.total_visitas DESC, m.id_mascota;
 GO
 
--- ------------------------------------------------------------
--- CONSULTA 3: Facturacion acumulada y promedio movil mensual
--- Ventanas: SUM() OVER acumulado, AVG() OVER movil, LAG().
--- ------------------------------------------------------------
+-- C3: Facturacion mensual acumulada y promedio movil (solo facturas Pagada)
+-- Ventanas: SUM() OVER acumulado, AVG() OVER movil, LAG()
 CHECKPOINT;
 DBCC DROPCLEANBUFFERS;
 DBCC FREEPROCCACHE;
 GO
 
 WITH mensual AS (
-    -- Total de facturas pagadas por mes
     SELECT
         DATEFROMPARTS(YEAR(f.fecha_emision_f),
                       MONTH(f.fecha_emision_f), 1)               AS mes,
@@ -159,51 +124,41 @@ ORDER BY mes;
 GO
 
 -- ============================================================
--- CREAR INDICES (una sola vez)
+-- INDICES PROPIOS (crear una sola vez)
 -- ============================================================
 
--- 3.1 Indices del equipo sobre llaves foraneas (con esquema).
---     Aceleran uniones y filtros por FK en todo el modelo.
-CREATE INDEX IX_mascotas_propietario       ON pacientes.mascotas (id_propietario);
-CREATE INDEX IX_mascotas_raza              ON pacientes.mascotas (id_raza);
-CREATE INDEX IX_veterinario_especialidad   ON personal.veterinario (id_especialidad);
-CREATE INDEX IX_citas_mascota              ON clinica.citas (id_mascota);
-CREATE INDEX IX_citas_veterinario          ON clinica.citas (id_veterinario);
-CREATE INDEX IX_citas_fecha                ON clinica.citas (fecha_c);
-CREATE INDEX IX_procedimientos_diagnostico ON clinica.procedimientos (id_diagnostico);
-CREATE INDEX IX_tratamiento_diagnostico    ON clinica.tratamiento (id_diagnostico);
-CREATE INDEX IX_dt_medicamento             ON clinica.detalles_tratamientos (id_medicamento);
--- Filtrados: solo indexan filas con valor (ahorran espacio).
-CREATE INDEX IX_df_cita          ON facturacion.detalles_facturas (id_cita)          WHERE id_cita IS NOT NULL;
-CREATE INDEX IX_df_medicamento   ON facturacion.detalles_facturas (id_medicamento)   WHERE id_medicamento IS NOT NULL;
-CREATE INDEX IX_df_tratamiento   ON facturacion.detalles_facturas (id_tratamiento)   WHERE id_tratamiento IS NOT NULL;
-CREATE INDEX IX_df_procedimiento ON facturacion.detalles_facturas (id_procedimiento) WHERE id_procedimiento IS NOT NULL;
-GO
-
--- 3.2 Indice propio CONSULTA 1
---     estado_c (igualdad) + fecha_c (rango); INCLUDE cubre la consulta
---     y evita volver a la tabla. Reemplaza el Clustered Index Scan.
+-- C1: estado_c (igualdad) + fecha_c (rango). INCLUDE cubre la consulta
+--     y evita volver a la tabla (reemplaza el Clustered Index Scan).
 CREATE NONCLUSTERED INDEX ix_citas_estado_fecha
 ON clinica.citas (estado_c, fecha_c)
 INCLUDE (id_veterinario, costo_c);
 GO
 
--- 3.3 Indice propio CONSULTA 2
---     Deja las citas completadas ya ordenadas por mascota y fecha:
---     LAG() no necesita el Sort que hay sin indice.
+-- C2: citas completadas ya ordenadas por mascota y fecha;
+--     LAG() no necesita el Sort que aparece sin indice.
 CREATE NONCLUSTERED INDEX ix_citas_estado_mascota_fecha
 ON clinica.citas (estado_c, id_mascota, fecha_c);
 GO
 
--- 3.4 Indice propio CONSULTA 3
---     estado_f (igualdad) + fecha_emision_f (orden por mes);
+-- C3: estado_f (igualdad) + fecha_emision_f (orden por mes);
 --     INCLUDE total_f hace que el indice cubra la consulta.
 CREATE NONCLUSTERED INDEX ix_facturas_estado_fecha
 ON facturacion.facturas (estado_f, fecha_emision_f)
 INCLUDE (total_f);
 GO
 
--- Verificar todos los indices creados (propios y del equipo)
+-- ============================================================
+-- CANDIDATOS ADICIONALES
+-- Se agregan aqui uno a uno. Solo se conservan (y documentan)
+-- los que bajan de forma clara lecturas logicas o CPU.
+-- ============================================================
+
+
+-- ============================================================
+-- VERIFICACION
+-- ============================================================
+
+-- Indices creados (columnas clave, incluidas y filtro)
 SELECT
     OBJECT_SCHEMA_NAME(i.object_id) AS esquema,
     OBJECT_NAME(i.object_id)        AS tabla,
@@ -216,12 +171,12 @@ SELECT
 FROM sys.indexes i
 JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
 JOIN sys.columns c        ON c.object_id = ic.object_id AND c.column_id = ic.column_id
-WHERE i.name LIKE 'ix[_]%'   -- IX_ y ix_ (propios y del equipo)
+WHERE i.name LIKE 'ix[_]%'
 GROUP BY i.object_id, i.name, i.type_desc, i.filter_definition
 ORDER BY esquema, tabla, indice;
 GO
 
--- Espacio ocupado por cada indice, en MB
+-- Espacio por indice (MB)
 SELECT
     OBJECT_SCHEMA_NAME(i.object_id) AS esquema,
     OBJECT_NAME(i.object_id)        AS tabla,
