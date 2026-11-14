@@ -1,15 +1,3 @@
-/*
-DEMO EN VIVO: probar un indice inicial o descartado, y dejar la base como estaba.
-Cada seccion se corre por separado (seleccionar y ejecutar). Despues, ejecutar
-3_Consultas_Lab.sql (o la consulta que se quiera ver) con "Actual Plan" activo.
-
-BASE POR DEFECTO: db_vet_lab_sin_indices (escenario limpio, igual al de las mediciones).
-Para hacerlo en db_veterinaria, cambiar la linea USE SOLO si el equipo lo autoriza.
-La LIMPIEZA (seccion 7) borra unicamente los indices de esta demo (6 nombres);
-nunca borra los 3 indices del diseño final.
-NO ejecutar la demo en db_vet_lab_con_indices: con el filtrado presente el optimizador
-puede elegir otro indice y el resultado deja de ser comparable.
-*/
 USE db_vet_lab_sin_indices;
 GO
 
