@@ -130,3 +130,58 @@ SELECT
 FROM clinica.citas c
 GROUP BY c.estado_c;
 GO
+
+
+-- BLOQUE DE COMPROBACIÓN
+-- ==============================================================================
+
+-- 1. Comprobación de tarjetas KPI superiores (Ingresos, Citas y Ticket Promedio)
+SELECT
+    SUM(TotalFacturado) AS Ingresos_Totales_Nov2026,
+    SUM(TotalCitasAtendidas) AS Total_Citas_Nov2026,
+    CAST(SUM(TotalFacturado) / SUM(TotalCitasAtendidas) AS DECIMAL(10,2)) AS Ticket_Promedio_Nov2026
+FROM bi.v_ingresos_por_especialidad
+WHERE Anio = 2026 AND MesNum = 11;
+
+-- 2. Comprobación de gráfico 1: Porcentaje de ingresos por especialidad
+SELECT
+    Especialidad,
+    TotalFacturado,
+    CAST(TotalFacturado * 100.0 / SUM(TotalFacturado) OVER() AS DECIMAL(5,2)) AS Porcentaje_Participacion
+FROM bi.v_ingresos_por_especialidad
+WHERE Anio = 2026 AND MesNum = 11
+ORDER BY TotalFacturado DESC;
+
+-- 3. Comprobación de gráfico 2 (Treemap): Top 7 especies de mascotas atendidas
+SELECT TOP 7
+    Especie,
+    SUM(CantidadMascotas) AS Total_Mascotas_Especie
+FROM bi.v_demografia_mascotas
+WHERE Anio = 2026 AND MesNum = 11
+GROUP BY Especie
+ORDER BY Total_Mascotas_Especie DESC;
+
+-- 4. Comprobación de gráfico 3 (Matriz): Ranking de veterinarios
+SELECT
+    DENSE_RANK() OVER (ORDER BY SUM(TotalGenerado) DESC) AS Posicion,
+    NombreVeterinario,
+    Especialidad,
+    SUM(CitasAtendidas) AS Citas_Atendidas,
+    SUM(TotalGenerado) AS Total_Generado
+FROM bi.v_desempenio_veterinarios
+WHERE Anio = 2026 AND MesNum = 11
+GROUP BY NombreVeterinario, Especialidad
+ORDER BY Posicion ASC;
+
+-- 5. Comprobación de gráfico 4 (Tabla): Stock actual en farmacia
+SELECT TOP 10
+    Medicamento,
+    StockActual AS Unidades_Disponibles,
+    CASE
+        WHEN StockActual < 15 THEN 'Critico (Rojo)'
+        WHEN StockActual < 50 THEN 'Moderado (Amarillo)'
+        ELSE 'Optimo (Verde)'
+        END AS Estado_Alerta
+FROM bi.v_rotacion_farmacia
+ORDER BY StockActual ASC;
+GO
